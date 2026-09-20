@@ -125,3 +125,5 @@ Settings > Secrets and variables > Actions:
 
 After that, opening or updating a PR triggers the review; Claude posts inline comments
 and a summary. Comments are posted with the default `GITHUB_TOKEN` (as `github-actions[bot]`).
+
+<!-- CI smoke test: verifying the Claude code review workflow triggers on PRs. This line can be removed. -->
