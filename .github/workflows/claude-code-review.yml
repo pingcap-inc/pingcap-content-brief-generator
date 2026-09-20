@@ -1,15 +1,16 @@
 name: Claude Code Review
 
-# Automatically reviews every pull request with Claude via Amazon Bedrock.
+# Automatically reviews every pull request with Claude via Amazon Bedrock,
+# authenticating with static AWS access keys stored as repo secrets.
 #
-# Bedrock uses OIDC authentication (no static API key). One-time setup by an admin:
-#   1. Create a GitHub OIDC identity provider + IAM role in the AWS account that has
-#      Bedrock access, with a trust policy scoped to this repo and permission to call
-#      bedrock:InvokeModel* / bedrock:InvokeModelWithResponseStream on the Claude models.
-#   2. Add repo secret  AWS_ROLE_TO_ASSUME  = the IAM role ARN.
-#   3. (Optional) Add repo variables:
-#        AWS_REGION        (default us-west-2)
-#        BEDROCK_MODEL_ID  (a Bedrock model / inference-profile ID you have enabled)
+# One-time setup by a repo admin
+# (Settings > Secrets and variables > Actions):
+#   Secrets:
+#     BEDROCK_AWS_ACCESS_KEY_ID       - AWS access key ID with Bedrock InvokeModel access
+#     BEDROCK_AWS_SECRET_ACCESS_KEY   - matching AWS secret access key
+#   Variables (optional; defaults below):
+#     BEDROCK_AWS_REGION              - default ap-southeast-1
+#     ANTHROPIC_MODEL                - default global.anthropic.claude-sonnet-4-5-20250929-v1:0
 # See the README section "Claude code review (Bedrock)" for details.
 
 on:
@@ -22,21 +23,19 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      id-token: write # required for AWS OIDC
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ vars.AWS_REGION || 'us-west-2' }}
-
       - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BEDROCK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BEDROCK_AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.BEDROCK_AWS_REGION || 'ap-southeast-1' }}
+          AWS_DEFAULT_REGION: ${{ vars.BEDROCK_AWS_REGION || 'ap-southeast-1' }}
         with:
           use_bedrock: "true"
 
@@ -77,5 +76,5 @@ jobs:
 
           # --model must be a Bedrock model / inference-profile ID enabled in your account.
           claude_args: |
-            --model ${{ vars.BEDROCK_MODEL_ID || 'us.anthropic.claude-sonnet-4-5-20250929-v1:0' }}
+            --model ${{ vars.ANTHROPIC_MODEL || 'global.anthropic.claude-sonnet-4-5-20250929-v1:0' }}
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"

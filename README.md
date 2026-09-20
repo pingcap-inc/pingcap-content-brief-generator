@@ -109,24 +109,19 @@ them automatically at startup.
 
 Every pull request is reviewed automatically by Claude via
 `.github/workflows/claude-code-review.yml` (using `anthropics/claude-code-action@v1`)
-running against **Amazon Bedrock**. Bedrock uses OIDC — there is no `ANTHROPIC_API_KEY`
-secret and no Claude GitHub App to install.
+running against **Amazon Bedrock**, authenticating with static AWS access keys. There is
+no `ANTHROPIC_API_KEY` secret and no Claude GitHub App to install.
 
-One-time setup by a repo + AWS admin:
+One-time setup by a repo admin, under
+Settings > Secrets and variables > Actions:
 
-1. **Create the GitHub OIDC provider in AWS** (once per account) for
-   `token.actions.githubusercontent.com`.
-2. **Create an IAM role** whose trust policy allows this repo to assume it, e.g. condition
-   `token.actions.githubusercontent.com:sub` = `repo:pingcap-inc/pingcap-content-brief-generator:*`,
-   with permissions `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream`
-   on the Claude model(s) you use.
-3. **Add repo secret** `AWS_ROLE_TO_ASSUME` = that IAM role ARN
-   (Settings > Secrets and variables > Actions).
-4. **(Optional) Add repo variables** (same page, "Variables" tab):
-   - `AWS_REGION` — the Bedrock region (defaults to `us-west-2`).
-   - `BEDROCK_MODEL_ID` — a Bedrock model / inference-profile ID enabled in your account
-     (defaults to `us.anthropic.claude-sonnet-4-5-20250929-v1:0`). Make sure Claude model
-     access is granted in every region the inference profile spans.
+1. **Add secrets** (Secrets tab):
+   - `BEDROCK_AWS_ACCESS_KEY_ID` — an AWS access key ID with Bedrock `InvokeModel` access.
+   - `BEDROCK_AWS_SECRET_ACCESS_KEY` — the matching secret access key.
+2. **(Optional) Add variables** (Variables tab; defaults are already baked in):
+   - `BEDROCK_AWS_REGION` — defaults to `ap-southeast-1`.
+   - `ANTHROPIC_MODEL` — defaults to `global.anthropic.claude-sonnet-4-5-20250929-v1:0`.
+     Ensure Claude model access is granted for this inference profile in your account.
 
 After that, opening or updating a PR triggers the review; Claude posts inline comments
 and a summary. Comments are posted with the default `GITHUB_TOKEN` (as `github-actions[bot]`).
