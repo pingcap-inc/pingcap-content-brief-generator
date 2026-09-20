@@ -37,6 +37,8 @@ jobs:
           AWS_REGION: ${{ vars.BEDROCK_AWS_REGION || 'ap-southeast-1' }}
           AWS_DEFAULT_REGION: ${{ vars.BEDROCK_AWS_REGION || 'ap-southeast-1' }}
         with:
+          # Use the built-in Actions token to post comments (no Claude GitHub App / OIDC).
+          github_token: ${{ github.token }}
           use_bedrock: "true"
 
           # Show review progress as checkboxes on the PR.
