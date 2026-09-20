@@ -105,18 +105,28 @@ For hosted deployments, base64-encode token.json and credentials.json and pass t
 as TOKEN\_JSON\_B64 and CREDENTIALS\_JSON\_B64 environment variables — the script decodes
 them automatically at startup.
 
-## Claude code review
+## Claude code review (Bedrock)
 
 Every pull request is reviewed automatically by Claude via
-`.github/workflows/claude-code-review.yml` (using `anthropics/claude-code-action@v1`).
+`.github/workflows/claude-code-review.yml` (using `anthropics/claude-code-action@v1`)
+running against **Amazon Bedrock**. Bedrock uses OIDC — there is no `ANTHROPIC_API_KEY`
+secret and no Claude GitHub App to install.
 
-One-time setup by a repo admin:
+One-time setup by a repo + AWS admin:
 
-1. **Add the API key secret.** In Settings > Secrets and variables > Actions, add a
-   repository secret named `ANTHROPIC_API_KEY` with a valid Anthropic API key.
-2. **Install the Claude GitHub App.** Visit https://github.com/apps/claude and
-   install it on `pingcap-inc/pingcap-content-brief-generator` (grant access to this repo).
+1. **Create the GitHub OIDC provider in AWS** (once per account) for
+   `token.actions.githubusercontent.com`.
+2. **Create an IAM role** whose trust policy allows this repo to assume it, e.g. condition
+   `token.actions.githubusercontent.com:sub` = `repo:pingcap-inc/pingcap-content-brief-generator:*`,
+   with permissions `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream`
+   on the Claude model(s) you use.
+3. **Add repo secret** `AWS_ROLE_TO_ASSUME` = that IAM role ARN
+   (Settings > Secrets and variables > Actions).
+4. **(Optional) Add repo variables** (same page, "Variables" tab):
+   - `AWS_REGION` — the Bedrock region (defaults to `us-west-2`).
+   - `BEDROCK_MODEL_ID` — a Bedrock model / inference-profile ID enabled in your account
+     (defaults to `us.anthropic.claude-sonnet-4-5-20250929-v1:0`). Make sure Claude model
+     access is granted in every region the inference profile spans.
 
 After that, opening or updating a PR triggers the review; Claude posts inline comments
-and a summary. You can also run `/install-github-app` from the Claude Code CLI to
-configure the secret and app automatically.
+and a summary. Comments are posted with the default `GITHUB_TOKEN` (as `github-actions[bot]`).
