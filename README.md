@@ -104,3 +104,19 @@ Never commit .env, token.json, or credentials.json. All three are in .gitignore.
 For hosted deployments, base64-encode token.json and credentials.json and pass them
 as TOKEN\_JSON\_B64 and CREDENTIALS\_JSON\_B64 environment variables — the script decodes
 them automatically at startup.
+
+## Claude code review
+
+Every pull request is reviewed automatically by Claude via
+`.github/workflows/claude-code-review.yml` (using `anthropics/claude-code-action@v1`).
+
+One-time setup by a repo admin:
+
+1. **Add the API key secret.** In Settings > Secrets and variables > Actions, add a
+   repository secret named `ANTHROPIC_API_KEY` with a valid Anthropic API key.
+2. **Install the Claude GitHub App.** Visit https://github.com/apps/claude and
+   install it on `pingcap-inc/pingcap-content-brief-generator` (grant access to this repo).
+
+After that, opening or updating a PR triggers the review; Claude posts inline comments
+and a summary. You can also run `/install-github-app` from the Claude Code CLI to
+configure the secret and app automatically.

@@ -1,0 +1,68 @@
+name: Claude Code Review
+
+# Automatically reviews every pull request with Claude.
+# Requires:
+#   1. An ANTHROPIC_API_KEY repository secret (Settings > Secrets and variables > Actions).
+#   2. The Claude GitHub App installed on this repo (https://github.com/apps/claude).
+# See README section "Claude code review" for setup steps.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # Show review progress as checkboxes on the PR.
+          track_progress: true
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are reviewing a pull request for the PingCAP Content Brief Generator,
+            a Python CLI (brief.py) that pulls data from external APIs (DataForSEO,
+            SEMrush, Google Search Console, Claude) and generates SEO/AEO content
+            briefs. Focus your review on:
+
+            1. **Correctness**
+               - Logic bugs, wrong control flow, and unhandled edge cases in the pipeline steps.
+               - Response parsing of external APIs (missing keys, empty results, rate limits).
+
+            2. **Security & secrets**
+               - No API keys, tokens, or credentials committed or logged.
+               - Environment variables read safely; .env stays out of version control.
+               - Safe handling of any URLs, subprocesses, or file writes.
+
+            3. **Robustness of external calls**
+               - Network/HTTP error handling, timeouts, retries, and graceful degradation
+                 when an upstream API (DataForSEO/SEMrush/GSC) fails or returns nothing.
+
+            4. **Python quality**
+               - Readability and maintainability, clear naming, and reasonable structure.
+               - Avoidable inefficiencies and dead code.
+
+            5. **Docs**
+               - README / .env.example stay accurate when flags, env vars, or steps change.
+
+            Leave inline comments for specific issues and a short top-level summary.
+            Be concise; skip nitpicks that don't affect correctness, security, or clarity.
+
+          # Tools Claude may use to review and comment on the PR.
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
