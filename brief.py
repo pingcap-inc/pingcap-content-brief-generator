@@ -23,6 +23,12 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+from internal_links import (
+    DEFAULT_INVENTORY_PATH,
+    DEFAULT_SITEMAP_URL,
+    load_internal_link_inventory,
+    select_internal_link_candidates,
+)
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -35,17 +41,20 @@ DATAFORSEO_LOGIN = os.getenv("DATAFORSEO_LOGIN")
 DATAFORSEO_PASSWORD = os.getenv("DATAFORSEO_PASSWORD")
 SEMRUSH_API_KEY = os.getenv("SEMRUSH_API_KEY")
 PINGCAP_DOMAIN = os.getenv("PINGCAP_DOMAIN", "pingcap.com")
+PINGCAP_SITEMAP_URL = os.getenv("PINGCAP_SITEMAP_URL", DEFAULT_SITEMAP_URL)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_FILE = os.path.join(SCRIPT_DIR, "credentials.json")
 TOKEN_FILE = os.path.join(SCRIPT_DIR, "token.json")
 FOLDER_ID_FILE = os.path.join(SCRIPT_DIR, ".folder_id")
 DRIVE_FOLDER_NAME = "Content Briefs"
+SITEMAP_INVENTORY_FILE = os.getenv(
+    "SITEMAP_INVENTORY_FILE", DEFAULT_INVENTORY_PATH
+)
 
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/drive.file",
-    "https://www.googleapis.com/auth/webmasters.readonly",
 ]
 
 CONTENT_TYPES = ["listicle", "comparison", "blog", "product", "playbook", "solution"]
@@ -628,115 +637,6 @@ def get_semrush_domain_authority(competitor_urls):
 
 
 
-# ── GSC Internal Links ────────────────────────────────────────────────────────
-
-def get_gsc_internal_links(topic, site_url=None):
-    """
-    Query GSC Search Analytics to find top-performing pingcap.com pages
-    for queries related to the topic. Returns a list of verified internal
-    link candidates with their actual click data.
-
-    Each result: { url, title_hint, clicks, impressions, position, queries }
-    """
-    if not site_url:
-        site_url = f"https://www.{PINGCAP_DOMAIN}"
-
-    try:
-        creds = get_google_credentials()
-        service = build("searchconsole", "v1", credentials=creds)
-    except Exception as exc:
-        print(f"    GSC auth failed: {exc}")
-        return []
-
-    # Extract the core keywords from the topic for matching
-    topic_words = [w.lower() for w in topic.split() if len(w) > 3]
-    # Also use the first 3 words as a phrase query
-    phrase = " ".join(topic.split()[:4])
-
-    results = {}  # url -> data
-
-    # Query 1: pages ranking for the topic phrase
-    try:
-        response = service.searchanalytics().query(
-            siteUrl=site_url,
-            body={
-                "startDate": _days_ago(90),
-                "endDate": _days_ago(1),
-                "dimensions": ["page", "query"],
-                "dimensionFilterGroups": [{
-                    "filters": [{
-                        "dimension": "query",
-                        "operator": "contains",
-                        "expression": topic.split()[0]  # first keyword
-                    }]
-                }],
-                "rowLimit": 50,
-                "orderby": [{"fieldName": "clicks", "sortOrder": "DESCENDING"}]
-            }
-        ).execute()
-
-        for row in response.get("rows", []):
-            url = row["keys"][0]
-            query = row["keys"][1]
-            clicks = row.get("clicks", 0)
-            impressions = row.get("impressions", 0)
-            position = round(row.get("position", 99), 1)
-
-            if url not in results:
-                results[url] = {
-                    "url": url,
-                    "clicks": 0,
-                    "impressions": 0,
-                    "position": position,
-                    "queries": []
-                }
-            results[url]["clicks"] += clicks
-            results[url]["impressions"] += impressions
-            if query not in results[url]["queries"]:
-                results[url]["queries"].append(query)
-    except Exception as exc:
-        print(f"    GSC query 1 failed: {exc}")
-
-    # Query 2: top pages overall for broader context (no filter)
-    try:
-        response2 = service.searchanalytics().query(
-            siteUrl=site_url,
-            body={
-                "startDate": _days_ago(90),
-                "endDate": _days_ago(1),
-                "dimensions": ["page"],
-                "rowLimit": 30,
-                "orderby": [{"fieldName": "clicks", "sortOrder": "DESCENDING"}]
-            }
-        ).execute()
-
-        for row in response2.get("rows", []):
-            url = row["keys"][0]
-            # Only include if topically relevant
-            url_lower = url.lower()
-            if any(w in url_lower for w in topic_words):
-                clicks = row.get("clicks", 0)
-                if url not in results:
-                    results[url] = {
-                        "url": url,
-                        "clicks": clicks,
-                        "impressions": row.get("impressions", 0),
-                        "position": round(row.get("position", 99), 1),
-                        "queries": []
-                    }
-    except Exception as exc:
-        print(f"    GSC query 2 failed: {exc}")
-
-    # Sort by clicks descending, return top 10
-    sorted_results = sorted(results.values(), key=lambda x: x["clicks"], reverse=True)
-    return sorted_results[:10]
-
-
-def _days_ago(n):
-    """Return date string N days ago in YYYY-MM-DD format."""
-    from datetime import datetime, timedelta
-    return (datetime.now() - timedelta(days=n)).strftime("%Y-%m-%d")
-
 # ── Claude ────────────────────────────────────────────────────────────────────
 
 def summarize_title(topic):
@@ -908,13 +808,22 @@ These are mandatory editorial standards the writer must follow before publicatio
 
 ### Internal Links
 
-Present as a Markdown table. Every URL must be a real, verified pingcap.com URL
-drawn from the reference examples or well-known PingCAP URL patterns.
-Do not invent or guess URLs. Aim for 5–8 links.
+Present up to five recommendations as a Markdown table in this exact format:
 
-| URL | Anchor Text |
-|-----|-------------|
-| https://www.pingcap.com/... | exact anchor text |
+| Section (H2) | Anchor text | Target URL | Why |
+|--------------|-------------|------------|-----|
+
+Use only URLs from the Verified Internal Link Candidates supplied in the research
+data. Never invent, alter, or guess a URL. If no candidates were supplied, write
+"No verified internal link candidates returned — refresh the sitemap inventory"
+instead of creating links.
+
+Map every link to the exact text of a named H2 in the outline. Use each target URL
+only once, place no more than two links in any H2, and keep anchor text descriptive
+and natural rather than exact-match stuffed. Preserve the deterministic slot purpose
+shown in each candidate's selection_rule field. The Why column must explain in one
+sentence how the target supports that specific H2. Treat this table as a recommendation
+for editorial approval before publication, not as automatic link insertion.
 
 ---
 
@@ -1414,8 +1323,9 @@ The 4,500 word ceiling is absolute — never exceed it regardless of topic compl
    "Visuals to Add", "Competitor Analysis", "Search Intent Analysis",
    "PingCAP/TiDB Angle", or "Keyword Strategy". These concepts belong in
    the Outline and Page Goal only.
-5. No invented pingcap.com URLs. Only use URLs that appear in the reference
-   examples or that follow a clearly established PingCAP URL pattern.
+5. No invented pingcap.com URLs. The Internal Links section may use only URLs
+   supplied in the Verified Internal Link Candidates research block. If that list
+   is empty, say so explicitly and do not create a URL.
 6. No unverified performance claims or superlatives without cited evidence.
 7. FAQ questions in the outline must map directly to the PAA data provided —
    do not invent questions.
@@ -1457,8 +1367,12 @@ fails a check before proceeding. Do not output a brief that fails any check.
 4.  The brief contains NO standalone sections titled "Key Points to Cover",
     "Proof Points", "Data to Find", "Examples", "Visuals to Add",
     "Competitor Analysis", "Search Intent Analysis", or "PingCAP/TiDB Angle".
-5.  Internal links are presented as a Markdown table with two columns.
-    Every URL is a real, verified pingcap.com URL — no invented paths.
+5.  Internal links are presented as a four-column Markdown table: Section (H2),
+    Anchor text, Target URL, and Why. The table contains no more than five unique
+    target URLs, every URL appears in the supplied candidate list, every link maps
+    to an exact H2 in the outline, no H2 receives more than two links, and every Why
+    cell contains a one-sentence rationale. If no candidates were supplied, the brief
+    says so explicitly instead of inventing URLs.
 6.  Meta title is <=60 characters, includes the target keyword, and contains NO year (e.g. "2024", "2025"). Year references date quickly — remove them.
 7.  Meta description is <=155 characters.
 8.  Entity Recognition Focus lists 10–15 specific named entities (products,
@@ -1583,7 +1497,7 @@ def build_system_prompt(examples_text, feedback_text):
     return "\n\n---\n\n".join(parts)
 
 
-def generate_brief(topic, content_type, keyword_data, serp_results, paa_questions, competitor_headings, llm_mentions_data=None, backlinks_data=None, semrush_data=None, gsc_internal_links=None):
+def generate_brief(topic, content_type, keyword_data, serp_results, paa_questions, competitor_headings, llm_mentions_data=None, backlinks_data=None, semrush_data=None, internal_link_candidates=None):
     """Load examples + feedback, build the system prompt, and call Claude."""
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -1688,20 +1602,20 @@ Higher authority competitors require deeper, more comprehensive content to compe
 ```
 """
 
-    if gsc_internal_links:
-        research_block += f"""
+    research_block += f"""
 ---
 
-## GSC Internal Link Candidates (Verified pingcap.com Pages)
+## Verified Internal Link Candidates (PingCAP Sitemap)
 
-These are real pingcap.com pages with confirmed organic traffic, ranked by clicks
-over the last 90 days. Use these as the source for the Internal Links table.
-Only suggest URLs from this list — do not invent or guess any pingcap.com paths.
-For each suggested internal link, use the actual URL shown below and write a
-natural anchor text based on the page topic and the context of the section it links from.
+These pages were selected deterministically from the verified PingCAP sitemap inventory.
+Use only these URLs in the Internal Links table. Do not invent, alter, or guess a path.
+Map each selected URL to an exact H2 in the outline, use each URL once, place no more
+than two links in one H2, and preserve the purpose in the selection_rule field.
+If the list is empty, state that the sitemap inventory returned no verified candidates
+and do not create an internal link.
 
 ```json
-{json.dumps(gsc_internal_links, indent=2)}
+{json.dumps(internal_link_candidates or [], indent=2)}
 ```
 """
 
@@ -2422,20 +2336,32 @@ def main():
         print(f"           Failed: {exc}")
         backlinks_data = None
 
-    # ── Step 6/11: GSC — internal link candidates ───────────────────────────
-    print("Step 6/11  Fetching internal link candidates from GSC...")
-    gsc_internal_links = []
+    # ── Step 6/11: Sitemap — internal link candidates ───────────────────────
+    print("Step 6/11  Selecting internal links from the PingCAP sitemap...")
+    internal_link_candidates = []
     try:
-        gsc_internal_links = get_gsc_internal_links(search_keyword)
-        if gsc_internal_links:
-            print(f"           Found {len(gsc_internal_links)} verified internal link candidates")
-            for p in gsc_internal_links[:3]:
-                print(f"           {p['url'][:70]}  ({p['clicks']} clicks)")
+        inventory_pages, inventory_source = load_internal_link_inventory(
+            inventory_path=SITEMAP_INVENTORY_FILE,
+            sitemap_url=PINGCAP_SITEMAP_URL,
+        )
+        internal_link_candidates = select_internal_link_candidates(
+            inventory_pages,
+            search_keyword,
+            content_type,
+            max_links=5,
+        )
+        if internal_link_candidates:
+            print(
+                f"           Found {len(internal_link_candidates)} verified candidates "
+                f"from {inventory_source}"
+            )
+            for page in internal_link_candidates:
+                print(f"           Slot {page['slot']}: {page['url'][:70]}")
         else:
-            print("           No relevant pages found in GSC for this topic")
+            print("           No topically relevant sitemap pages found")
     except Exception as exc:
         print(f"           Failed: {exc}")
-        gsc_internal_links = []
+        internal_link_candidates = []
 
     # ── Step 7/11: SEMrush — keyword intent ─────────────────────────────────
     print("Step 7/11  Fetching keyword intent from SEMrush...")
@@ -2524,7 +2450,7 @@ def main():
             llm_mentions_data=llm_mentions_data,
             backlinks_data=backlinks_data,
             semrush_data=semrush_data,
-            gsc_internal_links=gsc_internal_links,
+            internal_link_candidates=internal_link_candidates,
         )
         print("           Brief generated successfully")
     except Exception as exc:

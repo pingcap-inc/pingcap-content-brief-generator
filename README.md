@@ -1,6 +1,6 @@
 # PingCAP Content Brief Generator
 
-A CLI tool that generates SEO/AEO content briefs for PingCAP writers by pulling live data from DataForSEO, SEMrush, Google Search Console, and Claude.
+A CLI tool that generates SEO/AEO content briefs for PingCAP writers by pulling live data from DataForSEO, SEMrush, the PingCAP sitemap, and Claude.
 
 ## What it does
 
@@ -15,7 +15,7 @@ Runs an 11-step pipeline per topic:
 7. SEMrush related/LSI keywords
 8. SEMrush keyword gap vs competitors
 9. SEMrush domain authority (competitor domains)
-10. GSC internal link candidates (verified pingcap.com pages)
+10. Sitemap-backed internal link candidates (verified pingcap.com pages)
 11. Claude generates the structured brief
 
 Outputs a structured content brief to:
@@ -62,7 +62,6 @@ Enable these APIs in your Google Cloud project:
 
 - Google Docs API
 - Google Drive API
-- Google Search Console API (for internal link suggestions)
 
 ### 4. Run
 
@@ -95,8 +94,33 @@ The brief prompt enforces:
 - Per-section word count targets
 - Writer guardrails (benchmark sourcing, pricing claims, review verification)
 - Conflict disclosure for PingCAP-published content
-- Verified internal links from GSC data only
+- Up to five verified internal-link recommendations from the PingCAP sitemap
+- Exact H2 placement, suggested anchor text, and a rationale for every link
 - Schema markup recommendations matched to page sections
+
+## Internal-link inventory
+
+Internal-link recommendations are sourced from the verified sitemap index at
+`https://www.pingcap.com/sitemap_index.xml`. The generator never invents a URL.
+
+Refresh the local inventory manually with:
+
+```bash
+python build_sitemap_inventory.py
+```
+
+The command writes `sitemap_inventory.json`, storing each eligible page's URL,
+title, H1, meta description, mapped primary keyword when available, page type,
+and publish date. It excludes non-English URLs, documentation, tags, categories,
+pagination, and author archives. A weekly GitHub Actions workflow refreshes and
+commits this file automatically. If the file is absent, the CLI falls back to the
+live sitemap for verified URLs and uses URL slugs for lightweight matching.
+
+The deterministic selection layer prefers a governing pillar, a relevant hub,
+and, for comparison briefs, up to two sibling comparisons before filling any
+remaining slots by topical relevance. Claude maps those candidates to exact H2s
+and supplies descriptive anchor text and a one-sentence rationale. The resulting
+table is intended for editorial review before publication.
 
 ## Credentials security
 
