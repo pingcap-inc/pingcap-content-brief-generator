@@ -17,6 +17,13 @@ DEFAULT_SITEMAP_URL = "https://www.pingcap.com/sitemap_index.xml"
 DEFAULT_INVENTORY_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "sitemap_inventory.json"
 )
+ALLOWED_HOSTS = {"pingcap.com", "www.pingcap.com"}
+MAX_SITEMAP_WORKERS = 6
+MAX_CANDIDATE_POOL = 40
+PRIMARY_KEYWORD_WEIGHT = 5
+TITLE_WEIGHT = 4
+URL_WEIGHT = 3
+DESCRIPTION_WEIGHT = 1
 
 _SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 _NON_ENGLISH_PREFIXES = (
@@ -46,6 +53,8 @@ class _PageMetadataParser(HTMLParser):
         self.meta_description = ""
         self.primary_keyword = ""
         self.publish_date = ""
+        self.robots = []
+        self.canonical_url = ""
         self._in_title = False
         self._in_h1 = False
         self._title_parts = []
@@ -67,6 +76,14 @@ class _PageMetadataParser(HTMLParser):
                 self.primary_keyword = content.split(",")[0].strip()
             elif name in {"article:published_time", "date", "datepublished"} and not self.publish_date:
                 self.publish_date = content
+            elif name in {"robots", "googlebot"} and content:
+                self.robots.extend(
+                    directive.strip().lower() for directive in content.split(",")
+                )
+        elif tag == "link":
+            rel = (attrs.get("rel") or "").lower().split()
+            if "canonical" in rel and not self.canonical_url:
+                self.canonical_url = (attrs.get("href") or "").strip()
 
     def handle_endtag(self, tag):
         tag = tag.lower()
@@ -88,20 +105,39 @@ def _clean_text(value):
     return re.sub(r"\s+", " ", value or "").strip()
 
 
-def _get(url, timeout=30):
+def _get_response(url, timeout=30):
     import requests
 
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().split(":", 1)[0]
+    if parsed.scheme not in {"http", "https"} or host not in ALLOWED_HOSTS:
+        raise ValueError(f"Refusing non-PingCAP URL: {url}")
     response = requests.get(
         url,
         headers={"User-Agent": "PingCAP-Content-Brief-Generator/1.0"},
         timeout=timeout,
+        allow_redirects=True,
     )
     response.raise_for_status()
-    return response.text
+    if response.status_code != 200:
+        raise ValueError(f"Expected HTTP 200 from {url}, got {response.status_code}")
+    final_url = response.url or url
+    final_parsed = urlparse(final_url)
+    final_host = final_parsed.netloc.lower().split(":", 1)[0]
+    if final_parsed.scheme not in {"http", "https"} or final_host not in ALLOWED_HOSTS:
+        raise ValueError(f"Redirect left pingcap.com: {url} -> {final_url}")
+    return response
+
+
+def _get(url, timeout=30):
+    return _get_response(url, timeout=timeout).text
 
 
 def _xml_locations(xml_text):
-    root = ElementTree.fromstring(xml_text)
+    try:
+        root = ElementTree.fromstring(xml_text)
+    except ElementTree.ParseError as exc:
+        raise ValueError(f"Malformed sitemap XML: {exc}") from exc
     root_name = root.tag.rsplit("}", 1)[-1]
     if root_name == "sitemapindex":
         return "index", [
@@ -124,7 +160,7 @@ def is_eligible_url(url):
     parsed = urlparse(url)
     host = parsed.netloc.lower().split(":", 1)[0]
     path = parsed.path.lower()
-    if host not in {"pingcap.com", "www.pingcap.com"}:
+    if parsed.scheme not in {"http", "https"} or host not in ALLOWED_HOSTS:
         return False
     if path.startswith(_NON_ENGLISH_PREFIXES):
         return False
@@ -155,7 +191,10 @@ def classify_page_type(url, source_sitemap=""):
 
 def discover_sitemap_pages(sitemap_url=DEFAULT_SITEMAP_URL):
     """Return filtered page records from a sitemap index or URL set."""
-    sitemap_text = _get(sitemap_url)
+    try:
+        sitemap_text = _get(sitemap_url)
+    except Exception as exc:
+        raise RuntimeError(f"Could not fetch root sitemap {sitemap_url}: {exc}") from exc
     sitemap_type, values = _xml_locations(sitemap_text)
     sitemap_urls = values if sitemap_type == "index" else [sitemap_url]
     pages = []
@@ -165,7 +204,11 @@ def discover_sitemap_pages(sitemap_url=DEFAULT_SITEMAP_URL):
         if sitemap_type == "urls":
             child_entries = values
         else:
-            child_type, child_entries = _xml_locations(_get(child_url))
+            try:
+                child_type, child_entries = _xml_locations(_get(child_url))
+            except Exception as exc:
+                print(f"Skipping unavailable child sitemap {child_url}: {exc}")
+                continue
             if child_type != "urls":
                 continue
         for entry in child_entries:
@@ -192,8 +235,38 @@ def discover_sitemap_pages(sitemap_url=DEFAULT_SITEMAP_URL):
 def _fetch_page_metadata(page):
     enriched = dict(page)
     try:
+        response = _get_response(page["url"], timeout=20)
+        final_url = response.url or page["url"]
+        if not is_eligible_url(final_url):
+            raise ValueError(f"Final URL is not an eligible PingCAP content page: {final_url}")
         parser = _PageMetadataParser()
-        parser.feed(_get(page["url"], timeout=20))
+        parser.feed(response.text)
+        robots = {directive.split(":", 1)[0].strip() for directive in parser.robots}
+        x_robots_tag = response.headers.get("X-Robots-Tag", "").lower()
+        robots.update(
+            directive.split(":", 1)[0].strip()
+            for directive in x_robots_tag.split(",")
+            if directive.strip()
+        )
+        if "noindex" in robots or "none" in robots:
+            raise ValueError("Page is marked noindex")
+        page_label = f"{parser.title} {parser.h1}".lower()
+        if re.search(r"\b404\b|page not found|not found", page_label):
+            raise ValueError("Page appears to be a soft 404")
+        if parser.canonical_url:
+            canonical = urlparse(parser.canonical_url)
+            canonical_host = canonical.netloc.lower().split(":", 1)[0]
+            if canonical.scheme not in {"http", "https"} or canonical_host not in ALLOWED_HOSTS:
+                raise ValueError(f"Canonical URL is outside pingcap.com: {parser.canonical_url}")
+        if final_url != page["url"]:
+            enriched["original_url"] = page["url"]
+        enriched["url"] = final_url
+        enriched["final_url"] = final_url
+        enriched["status_code"] = response.status_code
+        enriched["canonical_url"] = parser.canonical_url
+        enriched["is_live"] = True
+        enriched["indexable"] = True
+        enriched["last_checked"] = datetime.now(timezone.utc).isoformat()
         enriched["title"] = parser.title or enriched["title"]
         enriched["h1"] = parser.h1
         enriched["meta_description"] = parser.meta_description
@@ -201,7 +274,10 @@ def _fetch_page_metadata(page):
         if parser.publish_date:
             enriched["publish_date"] = parser.publish_date
     except Exception as exc:
-        enriched["metadata_error"] = str(exc)
+        enriched["is_live"] = False
+        enriched["indexable"] = False
+        enriched["last_checked"] = datetime.now(timezone.utc).isoformat()
+        enriched["validation_error"] = str(exc)
     return enriched
 
 
@@ -217,19 +293,32 @@ def build_sitemap_inventory(
 
     if fetch_metadata and pages:
         enriched = [None] * len(pages)
-        with ThreadPoolExecutor(max_workers=12) as executor:
+        with ThreadPoolExecutor(max_workers=MAX_SITEMAP_WORKERS) as executor:
             future_indexes = {
                 executor.submit(_fetch_page_metadata, page): index
                 for index, page in enumerate(pages)
             }
             for future in as_completed(future_indexes):
                 enriched[future_indexes[future]] = future.result()
-        pages = enriched
+        valid_pages = []
+        seen_final_urls = set()
+        for page in enriched:
+            if not page.get("is_live") or not page.get("indexable"):
+                continue
+            if page["url"] in seen_final_urls:
+                continue
+            seen_final_urls.add(page["url"])
+            valid_pages.append(page)
+        excluded_page_count = len(enriched) - len(valid_pages)
+        pages = valid_pages
+    else:
+        excluded_page_count = 0
 
     inventory = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "sitemap_url": sitemap_url,
         "page_count": len(pages),
+        "excluded_page_count": excluded_page_count,
         "pages": pages,
     }
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -268,10 +357,10 @@ def _candidate_score(page, topic_tokens):
     url_tokens = _tokens(urlparse(page.get("url", "")).path.replace("-", " "))
     description_tokens = _tokens(page.get("meta_description", ""))
     return (
-        5 * len(topic_tokens & keyword_tokens)
-        + 4 * len(topic_tokens & title_tokens)
-        + 3 * len(topic_tokens & url_tokens)
-        + len(topic_tokens & description_tokens)
+        PRIMARY_KEYWORD_WEIGHT * len(topic_tokens & keyword_tokens)
+        + TITLE_WEIGHT * len(topic_tokens & title_tokens)
+        + URL_WEIGHT * len(topic_tokens & url_tokens)
+        + DESCRIPTION_WEIGHT * len(topic_tokens & description_tokens)
     )
 
 
@@ -280,6 +369,8 @@ def select_internal_link_candidates(pages, topic, content_type, max_links=5):
     topic_tokens = _tokens(topic)
     scored = []
     for page in pages:
+        if page.get("is_live") is False or page.get("indexable") is False:
+            continue
         score = _candidate_score(page, topic_tokens)
         if score <= 0:
             continue
@@ -287,7 +378,7 @@ def select_internal_link_candidates(pages, topic, content_type, max_links=5):
         candidate["relevance_score"] = score
         scored.append(candidate)
     scored.sort(key=lambda page: (-page["relevance_score"], page["url"]))
-    pool = scored[:40]
+    pool = scored[:MAX_CANDIDATE_POOL]
     selected = []
     selected_urls = set()
 
@@ -322,6 +413,23 @@ def select_internal_link_candidates(pages, topic, content_type, max_links=5):
     for index, item in enumerate(selected, start=1):
         item["slot"] = index
     return selected
+
+
+def validate_internal_link_candidates(candidates):
+    """Revalidate final candidates immediately before they enter the brief prompt."""
+    validated = []
+    seen_urls = set()
+    for candidate in candidates:
+        checked = _fetch_page_metadata(candidate)
+        if not checked.get("is_live") or not checked.get("indexable"):
+            continue
+        if checked["url"] in seen_urls:
+            continue
+        seen_urls.add(checked["url"])
+        validated.append(checked)
+    for index, item in enumerate(validated, start=1):
+        item["slot"] = index
+    return validated
 
 
 def main():

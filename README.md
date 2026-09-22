@@ -109,18 +109,23 @@ Refresh the local inventory manually with:
 python build_sitemap_inventory.py
 ```
 
-The command writes `sitemap_inventory.json`, storing each eligible page's URL,
+The command writes `sitemap_inventory.json`, storing each eligible page's final URL,
 title, H1, meta description, mapped primary keyword when available, page type,
-and publish date. It excludes non-English URLs, documentation, tags, categories,
-pagination, and author archives. A weekly GitHub Actions workflow refreshes and
-commits this file automatically. If the file is absent, the CLI falls back to the
-live sitemap for verified URLs and uses URL slugs for lightweight matching.
+publish date, HTTP status, canonical URL, and validation timestamp. Sitemap membership
+alone is not treated as proof that a page is live: the builder follows redirects,
+requires a final HTTP 200 response on `pingcap.com`, and excludes `noindex` pages,
+soft 404s, and metadata fetch failures. It also excludes non-English URLs,
+documentation, tags, categories, pagination, and author archives. A weekly GitHub
+Actions workflow refreshes and commits this file automatically. If the file is absent,
+the CLI falls back to the live sitemap and uses URL slugs for lightweight matching.
 
 The deterministic selection layer prefers a governing pillar, a relevant hub,
 and, for comparison briefs, up to two sibling comparisons before filling any
 remaining slots by topical relevance. Claude maps those candidates to exact H2s
 and supplies descriptive anchor text and a one-sentence rationale. The resulting
-table is intended for editorial review before publication.
+table is intended for editorial review before publication. Immediately before the
+selected candidates enter the prompt, the CLI fetches them again and removes any URL
+that no longer returns a live, indexable PingCAP page.
 
 ## Credentials security
 

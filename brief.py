@@ -28,6 +28,7 @@ from internal_links import (
     DEFAULT_SITEMAP_URL,
     load_internal_link_inventory,
     select_internal_link_candidates,
+    validate_internal_link_candidates,
 )
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
@@ -48,9 +49,7 @@ CREDENTIALS_FILE = os.path.join(SCRIPT_DIR, "credentials.json")
 TOKEN_FILE = os.path.join(SCRIPT_DIR, "token.json")
 FOLDER_ID_FILE = os.path.join(SCRIPT_DIR, ".folder_id")
 DRIVE_FOLDER_NAME = "Content Briefs"
-SITEMAP_INVENTORY_FILE = os.getenv(
-    "SITEMAP_INVENTORY_FILE", DEFAULT_INVENTORY_PATH
-)
+SITEMAP_INVENTORY_FILE = os.getenv("SITEMAP_INVENTORY_FILE") or DEFAULT_INVENTORY_PATH
 
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/documents",
@@ -2349,6 +2348,9 @@ def main():
             search_keyword,
             content_type,
             max_links=5,
+        )
+        internal_link_candidates = validate_internal_link_candidates(
+            internal_link_candidates
         )
         if internal_link_candidates:
             print(
