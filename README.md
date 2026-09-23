@@ -21,7 +21,7 @@ Runs an 11-step pipeline per topic:
 Outputs a structured content brief to:
 
 - Google Docs (saved to a "Content Briefs" Drive folder)
-- Local .md file (fallback if Google auth is not configured)
+- Local .md file (always saved before Google Docs export)
 
 ## Content types
 
@@ -154,3 +154,34 @@ Settings > Secrets and variables > Actions:
 
 After that, opening or updating a PR triggers the review; Claude posts inline comments
 and a summary. Comments are posted with the default `GITHUB_TOKEN` (as `github-actions[bot]`).
+
+## Brief consistency checks
+
+Listicles allow up to 12 H2 sections; other types allow 10. Article word budgets
+use valid SEMrush primary-keyword volume first, then the DataForSEO seed volume.
+The 2,000–4,999 and 5,000+ tiers do not overlap. Listicle section allocations
+sum to a selected article total, including the introduction and FAQ allowance.
+Solution pages use `/solutions/`; customer evidence is conditional on relevant
+source material. The two-visual cap applies to commissioned diagrams/illustrations,
+not tables, code snippets, existing assets, or the solution hero video.
+
+The SERP request retains AI Overview and featured-snippet evidence, including
+source URLs. Missing feature evidence is explicitly unavailable, not evidence
+that the feature does not exist. Asynchronous AI Overview loading is enabled;
+DataForSEO may charge its documented additional fee for this option.
+
+Competitor keyword opportunities are checked against PingCAP's exact-keyword
+SEMrush US domain report (up to 20 unique keywords per brief). Top-10 PingCAP
+rankings are excluded; lower rankings include the existing URL as an improvement
+opportunity. No ranking returned means a potential gap requiring a content check.
+Failed lookups remain unknown. These checks add SEMrush requests and API usage.
+
+Before export, structural validation checks section order, H2 limits, second-H2
+comparison placement, word budgets, visual-line presence, metadata lengths, URL
+structure, and supplied internal-link URLs and placements. Truncated responses or
+validation failures stop the run with an error. These checks do not certify factual
+accuracy, customer evidence, or every editorial instruction; human review is still
+required. Google Docs separates the outline from trailing metadata using named
+section boundaries at any supported Markdown heading level.
+
+Run regression checks with `python3 -m unittest discover -s tests -v`.
