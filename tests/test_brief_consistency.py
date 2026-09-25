@@ -6,19 +6,22 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
+from urllib.parse import urlparse
+
+import requests
 
 SOURCE = Path(__file__).resolve().parents[1] / 'brief.py'
 tree = ast.parse(SOURCE.read_text())
 FUNCTIONS = {'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
              'check_pingcap_ranking', 'get_semrush_keyword_gap', 'get_serp_and_paa',
-             'generate_brief', 'semrush_get', 'summarize_title'}
+             'generate_brief', 'semrush_get', 'summarize_title', 'url_domain'}
 CONSTANTS = {'_BRIEF_SECTIONS', '_BASE_INSTRUCTIONS', '_QUALITY_CHECKLIST'}
 selected = [n for n in tree.body if
             isinstance(n, ast.FunctionDef) and n.name in FUNCTIONS or
             isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in CONSTANTS for t in n.targets)]
 
 def namespace():
-    ns = {'re': re, 'json': json, 'PINGCAP_DOMAIN': 'pingcap.com', 'SEMRUSH_API_KEY': 'test'}
+    ns = {'re': re, 'json': json, 'requests': requests, 'urlparse': urlparse, 'PINGCAP_DOMAIN': 'pingcap.com', 'SEMRUSH_API_KEY': 'test'}
     exec(compile(ast.Module(body=selected, type_ignores=[]), str(SOURCE), 'exec'), ns)
     return ns
 
@@ -75,6 +78,16 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(ns['check_pingcap_ranking']('scaling')['classification'],'potential content gap')
         ns['semrush_get']=Mock(side_effect=RuntimeError('API unavailable'))
         self.assertEqual(ns['check_pingcap_ranking']('scaling')['classification'],'unknown')
+        ns['semrush_get']=Mock(side_effect=requests.ConnectionError('timeout'))
+        self.assertEqual(ns['check_pingcap_ranking']('scaling')['classification'],'unknown')
+        ns['semrush_get']=Mock(side_effect=AttributeError('bug'))
+        with self.assertRaises(AttributeError):ns['check_pingcap_ranking']('scaling')
+    def test_url_domain(self):
+        ns=namespace()
+        self.assertEqual(ns['url_domain']('https://www.example.com/a/b'),'example.com')
+        self.assertEqual(ns['url_domain']('https://docs.www.example.com/'),'docs.www.example.com')
+        for bad in ['notaurl','https:/malformed','','https://[::1']:
+            self.assertEqual(ns['url_domain'](bad),'')
     def test_top_ten_excluded_and_keywords_deduplicated(self):
         ns=namespace()
         ns['semrush_get']=Mock(return_value=[{'Ph':'scaling database','Nq':'500','Po':'3'}])

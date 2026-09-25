@@ -16,6 +16,7 @@ import re
 import json
 import base64
 import requests
+from urllib.parse import urlparse
 from html.parser import HTMLParser
 from dotenv import load_dotenv
 import anthropic
@@ -484,6 +485,15 @@ def extract_headings_from_url(url):
         return []
 
 
+def url_domain(url):
+    """Return the host of an absolute URL without a leading "www.", or "" if unparseable."""
+    try:
+        host = urlparse(url).hostname or ""
+    except ValueError:
+        return ""
+    return host.removeprefix("www.")
+
+
 # ── SEMrush Helpers ───────────────────────────────────────────────────────────
 
 def semrush_get(params, strict=False):
@@ -637,9 +647,8 @@ def get_semrush_domain_authority(competitor_urls):
     results = []
     seen_domains = set()
     for url in competitor_urls[:3]:
-        try:
-            domain = url.split("/")[2].replace("www.", "")
-        except IndexError:
+        domain = url_domain(url)
+        if not domain:
             continue
         if domain in seen_domains:
             continue
@@ -1576,7 +1585,7 @@ def check_pingcap_ranking(keyword):
         ), "pingcap_position": position, "pingcap_url": best["Ur"]}
     except (RuntimeError, ValueError, TypeError, KeyError):
         return unknown
-    except Exception:
+    except requests.RequestException:
         # Transport failures must not masquerade as missing rankings.
         return unknown
 
@@ -2614,13 +2623,9 @@ def main():
             competitor_domains = []
             for r in serp_results[:3]:
                 url = r.get("url", "")
-                if url:
-                    try:
-                        domain = url.split("/")[2].replace("www.", "")
-                        if domain and domain != PINGCAP_DOMAIN:
-                            competitor_domains.append(domain)
-                    except IndexError:
-                        pass
+                domain = url_domain(url)
+                if domain and domain != PINGCAP_DOMAIN:
+                    competitor_domains.append(domain)
             if competitor_domains:
                 semrush_gap = get_semrush_keyword_gap(search_keyword, competitor_domains)
                 print(f"           Found {len(semrush_gap)} gap keywords vs {competitor_domains[:2]}")
