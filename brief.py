@@ -1745,6 +1745,13 @@ def validate_brief(content, content_type, candidates, plan):
 
 def generate_brief(topic, content_type, keyword_data, serp_results, paa_questions, competitor_headings, llm_mentions_data=None, backlinks_data=None, semrush_data=None, internal_link_candidates=None, serp_features=None):
     """Load examples + feedback, build the system prompt, and call Claude."""
+    try:
+        brief_max_tokens = int(os.getenv("ANTHROPIC_MAX_TOKENS") or "16000")
+    except ValueError as exc:
+        raise ValueError("ANTHROPIC_MAX_TOKENS must be a positive integer") from exc
+    if brief_max_tokens <= 0:
+        raise ValueError("ANTHROPIC_MAX_TOKENS must be a positive integer")
+
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     examples_text = load_brief_examples()
@@ -1872,7 +1879,7 @@ and do not create an internal link.
 
     message = client.messages.create(
         model=ANTHROPIC_MODEL,
-        max_tokens=8096,
+        max_tokens=brief_max_tokens,
         system=system_prompt,
         messages=[
             {
