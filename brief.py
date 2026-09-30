@@ -1885,12 +1885,39 @@ and do not create an internal link.
         ],
     )
 
-    if message.stop_reason != "end_turn":
-        raise ValueError(f"Brief generation incomplete: {message.stop_reason}")
     text = "\n".join(block.text for block in message.content if block.type == "text")
-    errors = validate_brief(text, content_type, internal_link_candidates or [], plan)
+    errors = []
+    if message.stop_reason != "end_turn":
+        errors.append(f"Brief generation incomplete: {message.stop_reason}")
+    else:
+        errors = validate_brief(text, content_type, internal_link_candidates or [], plan)
     if errors:
-        raise ValueError("Brief failed validation: " + "; ".join(errors))
+        import tempfile
+
+        # Preserve paid generation output and research before rejecting the brief.
+        # A unique directory keeps repeated failures from overwriting earlier drafts.
+        draft_dir = tempfile.mkdtemp(prefix="brief_failed_", dir=os.getcwd())
+        draft_path = os.path.join(draft_dir, "draft.md")
+        with open(draft_path, "w", encoding="utf-8") as handle:
+            handle.write("<!-- UNVALIDATED DRAFT: not approved for publication. "
+                         "See validation.json. -->\n\n" + text)
+        print(f"           Unvalidated draft saved: {draft_path}")
+        report_path = os.path.join(draft_dir, "validation.json")
+        with open(report_path, "w", encoding="utf-8") as handle:
+            json.dump({
+                "status": "unvalidated",
+                "topic": topic,
+                "content_type": content_type,
+                "model": ANTHROPIC_MODEL,
+                "stop_reason": message.stop_reason,
+                "errors": errors,
+                "word_count_plan": plan,
+            }, handle, indent=2, ensure_ascii=False)
+        with open(os.path.join(draft_dir, "research.md"), "w", encoding="utf-8") as handle:
+            handle.write(research_block)
+        print(f"           Validation report saved: {report_path}")
+        raise ValueError("Brief failed validation: " + "; ".join(errors)
+                         + f". Draft and research preserved in {draft_dir}")
     return text
 
 
