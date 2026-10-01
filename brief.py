@@ -15,6 +15,7 @@ import os
 import re
 import json
 import base64
+import tempfile
 import requests
 from urllib.parse import urlparse
 from html.parser import HTMLParser
@@ -868,7 +869,14 @@ for editorial approval before publication, not as automatic link insertion.
 
 ### LLM Visibility Snapshot
 
-Using the LLM mentions data provided, produce:
+Keep Google SERP AI Overview evidence separate from the LLM mentions report.
+An empty mentions report (even with false mention flags) is unavailable evidence,
+not proof of absence. Identify the actual platform and snapshot; do not infer
+ChatGPT or other platform visibility from Google data. Cite only supplied sources.
+Recommendations are editorial hypotheses, not proof that a format caused a citation
+or a guarantee of AI inclusion, featured snippets, or schema rich-result eligibility.
+
+Using the available evidence, produce:
 
 - **AI Search Presence**: How many AI-generated responses mention this topic area,
   and which platforms surface results (Google AI Overviews, ChatGPT, etc.)
@@ -888,6 +896,9 @@ recommended."
 ---
 
 ### Link Landscape & Acquisition Angle
+
+Do not infer low competition or a time-to-rank forecast from a small backlink
+sample, missing metrics, or social-platform results. State those limitations.
 
 Using the backlinks data provided, produce:
 
@@ -925,6 +936,11 @@ ranking pages for the primary keyword. Format exactly as follows:
 |---|------|-----------|
 | [rank] | [page title / domain] | [1–2 sentence description of what this page covers and what angle it takes — be specific, not generic] |
 
+Preserve each page's original SERP rank; never renumber after exclusions.
+Identify PingCAP pages as existing owned coverage, not external competitors, and
+recommend reviewing them for a refresh before commissioning duplicate coverage.
+Base key angles on supplied snippets/headings; do not imply an unread full-page audit.
+
 Include up to 5 rows — only pages that are genuinely topically relevant to the
 primary keyword. If fewer than 5 relevant pages are in the SERP data, include only
 those that are relevant and note the others as "not topically relevant — excluded".
@@ -957,6 +973,16 @@ for this block and move on. Do not omit the block entirely.
 ---
 
 #### Heading structure rules
+
+- Use literal Markdown levels: `# Article title`, `## Article section`, and
+  `### Article subsection`. Do not write `## H1: ...` or add H2 labels.
+  Reserve `##` inside the outline for article H2s only. Keep visual notes inline;
+  do not add a Visual Recommendations Summary heading or duplicate summary table.
+- Allocate the H1 introduction plus all H2s within the supplied Word Count Plan.
+  Both the sum of lower bounds and sum of upper bounds must fit that tier.
+  H3 budgets subdivide their parent H2 and must never add to the article total.
+  Use the supplied section allocations when present, as Target: ~N–N words.
+  The selected tier's maximum applies even when below the global 4,500 ceiling.
 
 - Maximum 10 H2 sections, except listicles which allow up to 12.
   Keep the AEO answer and named mechanism requirements within the existing sections.
@@ -1632,6 +1658,19 @@ def word_count_plan(keyword_data, semrush_data, content_type):
             "Use Target: ~N–N words for each allocation. H3s subdivide H2 allocations. "
             "If PAA is empty, omit FAQs and redistribute that allocation."
         )
+    if content_type == "comparison":
+        labels = ["H1 introduction", "AEO answer", "At a glance", "Architecture / named mechanism",
+                  "Performance", "Compatibility", "High availability", "Decision framework",
+                  "Closing CTA", "FAQs"]
+        weights = [6, 8, 10, 14, 14, 12, 11, 12, 6, 7]
+        budgets = [total * weight // 100 for weight in weights]
+        budgets[-1] += total - sum(budgets)
+        plan["section_budgets"] = dict(zip(labels, budgets))
+        plan["budget_rule"] = (
+            "Use these allocations as Target: ~N–N words. Adapt heading wording to the topic; "
+            "keep At a glance second. H3s subdivide their H2 allocation. If PAA is empty, "
+            "omit FAQs and redistribute its allocation without changing the total."
+        )
     return plan
 
 
@@ -1661,8 +1700,35 @@ def brief_sections(content):
             for i, (name, start, body) in enumerate(markers)]
 
 
+def normalize_brief_headings(content):
+    """Repair known presentation variants only inside the outline, outside code fences."""
+    for name, start, end, body in brief_sections(content):
+        if name != "Outline / Headings":
+            continue
+        lines = []
+        fence = None
+        for line in content[body:end].splitlines(keepends=True):
+            marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+            if marker:
+                token = marker.group(1)
+                if fence is None:
+                    fence = token
+                elif token[0] == fence[0] and len(token) >= len(fence):
+                    fence = None
+                lines.append(line)
+                continue
+            if fence is None:
+                line = re.sub(r"^#{1,3}\s+H1:\s*", "# ", line, flags=re.I)
+                line = re.sub(r"^##\s+Visual Recommendations Summary\s*(?:\n|$)",
+                              "**Visual Recommendations Summary**\n", line, flags=re.I)
+            lines.append(line)
+        return content[:body] + "".join(lines) + content[end:]
+    return content
+
+
 def validate_brief(content, content_type, candidates, plan):
     """Enforce observable structure and link constraints; editorial review is still needed."""
+    content = normalize_brief_headings(content)
     errors = []
     sections = brief_sections(content)
     names = [name for name, *_ in sections]
@@ -1671,7 +1737,7 @@ def validate_brief(content, content_type, candidates, plan):
     bodies = {name: content[body:end] for name, start, end, body in sections}
     outline = bodies.get("Outline / Headings", "")
     # Fenced SQL/Markdown samples are not outline headings.
-    outline = re.sub(r"(?ms)^\s*```.*?^\s*```[^\n]*$", "", outline)
+    outline = re.sub(r"(?ms)^[ \t]*(`{3,}|~{3,})[^\n]*\n.*?^[ \t]*\1[ \t]*$", "", outline)
     h2s = list(re.finditer(r"(?m)^##\s+(.+)$", outline))
     if not 1 <= len(h2s) <= (12 if content_type == "listicle" else 10):
         errors.append("Invalid number of article H2s")
@@ -1897,10 +1963,9 @@ and do not create an internal link.
     if message.stop_reason != "end_turn":
         errors.append(f"Brief generation incomplete: {message.stop_reason}")
     else:
+        text = normalize_brief_headings(text)
         errors = validate_brief(text, content_type, internal_link_candidates or [], plan)
     if errors:
-        import tempfile
-
         # Preserve paid generation output and research before rejecting the brief.
         # A unique directory keeps repeated failures from overwriting earlier drafts.
         draft_dir = tempfile.mkdtemp(prefix="brief_failed_", dir=os.getcwd())
@@ -2745,3 +2810,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
