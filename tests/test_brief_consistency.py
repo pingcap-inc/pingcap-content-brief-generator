@@ -14,7 +14,7 @@ import requests
 
 SOURCE = Path(__file__).resolve().parents[1] / 'brief.py'
 tree = ast.parse(SOURCE.read_text())
-FUNCTIONS = {'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
+FUNCTIONS = {'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
              'check_pingcap_ranking', 'get_semrush_keyword_gap', 'get_serp_and_paa',
              'generate_brief', 'semrush_get', 'summarize_title', 'url_domain'}
 CONSTANTS = {'_BRIEF_SECTIONS', '_BASE_INSTRUCTIONS', '_QUALITY_CHECKLIST'}
@@ -180,6 +180,37 @@ class OutputTests(unittest.TestCase):
             self.assertLessEqual(plan['article_target'], plan['maximum'])
             self.assertEqual(list(plan['section_budgets'])[2], 'At a glance')
 
+    def test_single_and_range_budget_formats(self):
+        ns = namespace()
+        for line, expected in [('Target: ~172 words', (172,172)),
+                               ('**Target: ~172 words**', (172,172)),
+                               ('**Target:** ~172 words', (172,172)),
+                               ('Target: 1,800–2,500 words', (1800,2500)),
+                               ('Target: ~1800-2500 words', (1800,2500))]:
+            self.assertEqual(ns['parse_word_budget'](line), expected)
+        for line in ['Target: included in parent budget', 'Target: -172 words',
+                     'Target: ~words', 'Target: 172– words']:
+            self.assertIsNone(ns['parse_word_budget'](line))
+
+    def test_single_budgets_are_counted_and_invalid_budgets_rejected(self):
+        ns = namespace()
+        base = valid_brief(ns)
+        plan = {'minimum':1800,'maximum':2500}
+        self.assertEqual(ns['validate_brief'](base.replace('1800–2500','2150'), 'blog', [], plan), [])
+        for budget in ['2600', '1700', '2500–1800', '0–2150']:
+            errors = ns['validate_brief'](base.replace('1800–2500',budget), 'blog', [], plan)
+            self.assertIn('Top-level word budgets do not fit the selected MSV tier', errors)
+        errors = ns['validate_brief'](base.replace('Target: ~1800–2500 words',''), 'blog', [], plan)
+        self.assertIn('Missing word budget: Scaling', errors)
+
+    def test_unmatched_link_reports_exact_heading(self):
+        ns = namespace()
+        url = 'https://www.pingcap.com/example/'
+        text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+            '| Wrong heading | Learn | ' + url + ' | Reason |')
+        errors = ns['validate_brief'](text, 'blog', [{'url':url}], {'minimum':1800,'maximum':2500})
+        self.assertTrue(any("'Wrong heading'" in e and 'copy the exact heading' in e for e in errors))
+
     def test_prompt_conflicts_removed(self):
         ns=namespace();prompt=ns['_BASE_INSTRUCTIONS']+ns['_QUALITY_CHECKLIST']
         self.assertNotIn('2,000–5,000',prompt)
@@ -188,4 +219,5 @@ class OutputTests(unittest.TestCase):
         self.assertIn('12 for listicles',prompt)
 
 if __name__=='__main__':unittest.main()
+
 
