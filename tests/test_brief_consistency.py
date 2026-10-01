@@ -14,7 +14,7 @@ import requests
 
 SOURCE = Path(__file__).resolve().parents[1] / 'brief.py'
 tree = ast.parse(SOURCE.read_text())
-FUNCTIONS = {'resolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
+FUNCTIONS = {'markdown_lines', 'resolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
              'check_pingcap_ranking', 'get_semrush_keyword_gap', 'get_serp_and_paa',
              'generate_brief', 'semrush_get', 'summarize_title', 'url_domain'}
 CONSTANTS = {'_BRIEF_SECTIONS', '_BASE_INSTRUCTIONS', '_QUALITY_CHECKLIST'}
@@ -222,7 +222,7 @@ class OutputTests(unittest.TestCase):
         self.assertEqual(ns['resolve_internal_link_ids'](resolved), resolved)
         self.assertEqual(ns['validate_brief'](text, 'blog', [{'url':url}], {'minimum':1800,'maximum':2500}), [])
         for fence in ['```', '~~~']:
-            sample = text.replace('## A newly worded heading', '# Intro\n### Subheading\n' + fence + '\n## Sample\n' + fence + '\n## A newly worded heading')
+            sample = text.replace('## A newly worded heading', '# Intro\nTarget: ~100 words\n### Subheading\n' + fence + '\n## Sample\n' + fence + '\n## A newly worded heading')
             self.assertIn('| A newly worded heading |', ns['resolve_internal_link_ids'](sample))
         for bad in ['h2_0', 'h2_99', 'h2_01', 'h2_x']:
             errors = ns['validate_brief'](text.replace('| h2_1 |', '| '+bad+' |'), 'blog', [{'url':url}], {'minimum':1800,'maximum':2500})
@@ -256,6 +256,41 @@ class OutputTests(unittest.TestCase):
         errors = ns['validate_brief'](text.replace(urls[1],urls[0]), 'blog', [{'url':url} for url in urls], {'minimum':1800,'maximum':2500})
         self.assertIn('Unverified or duplicate internal link', errors)
 
+    def test_formatted_ids(self):
+        ns=namespace(); url='https://www.pingcap.com/example/'
+        for key in ['**h2_1**', '`h2_1`', '__h2_1__']:
+            text=valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+                '| '+key+' | Learn | '+url+' | Reason |')
+            self.assertEqual(ns['validate_brief'](text,'blog',[{'url':url}],{'minimum':1800,'maximum':2500}),[])
+            self.assertIn('| Scaling |',ns['resolve_internal_link_ids'](text))
+
+    def test_empty_link_table_rejected(self):
+        ns=namespace()
+        text=valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+            '| Section (H2) | Anchor text | Target URL | Why |\n|---|---|---|---|')
+        self.assertIn('Internal Links table contains no verified link recommendations',
+            ns['validate_brief'](text,'blog',[{'url':'https://www.pingcap.com/x/'}],{'minimum':1800,'maximum':2500}))
+
+    def test_missing_intro_budget_rejected(self):
+        ns=namespace(); text=valid_brief(ns).replace('## Scaling','# Intro\nNo allocation.\n## Scaling')
+        self.assertIn('Missing word budget: H1 introduction',ns['validate_brief'](text,'blog',[],{'minimum':1800,'maximum':2500}))
+
+    def test_consistent_fences(self):
+        ns=namespace()
+        for sample in ['```markdown\n## Sample\n````\n',
+                       '~~~~markdown\n```\n### CTAs\n## Sample\n~~~~~\n',
+                       '```markdown\n```not-a-close\n## Sample\n```\n']:
+            text=valid_brief(ns).replace('## Scaling',sample+'## Scaling')
+            self.assertEqual(ns['validate_brief'](text,'blog',[],{'minimum':1800,'maximum':2500}),[])
+            self.assertEqual(ns['normalize_brief_headings'](text),text)
+            self.assertEqual(len(ns['brief_sections'](text)),len(ns['_BRIEF_SECTIONS']))
+
+    def test_env_template_names_and_model(self):
+        env=SOURCE.with_name('.env.example').read_text()
+        self.assertNotIn('\\_',env)
+        self.assertIn('ANTHROPIC_MODEL=claude-sonnet-4-6',env)
+        self.assertIn('DRIVE_FOLDER_ID=',env)
+
     def test_prompt_conflicts_removed(self):
         ns=namespace();prompt=ns['_BASE_INSTRUCTIONS']+ns['_QUALITY_CHECKLIST']
         self.assertNotIn('2,000–5,000',prompt)
@@ -264,6 +299,7 @@ class OutputTests(unittest.TestCase):
         self.assertIn('12 for listicles',prompt)
 
 if __name__=='__main__':unittest.main()
+
 
 
 
