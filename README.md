@@ -196,3 +196,16 @@ section boundaries at any supported Markdown heading level.
 
 Run regression checks with `python3 -m unittest discover -s tests -v`.
 
+
+
+### Internal-link section IDs
+
+Generated link tables use `h2_1`, `h2_2`, etc., referring to article H2s in final
+outline order. Python builds the ID map after heading normalization and replaces
+the IDs with the actual headings before validation and export. H1s, H3s, metadata,
+and fenced code examples do not receive IDs. Wording changes therefore do not
+require repeating the heading text in the generated link table. Reordering sections
+requires updating their ordinal IDs. Existing exact-heading tables remain supported.
+Unknown IDs, unmatched legacy headings, duplicate/unverified URLs, and more than two
+links per H2 still fail validation. The code does not guess semantic link placement;
+editorial relevance still requires review. No extra generation call is needed.
