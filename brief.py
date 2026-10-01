@@ -1726,6 +1726,21 @@ def normalize_brief_headings(content):
     return content
 
 
+def parse_word_budget(text):
+    """Read a standalone Target line; a single value is an exact min/max budget."""
+    plain = text.replace("**", "").replace("__", "")
+    match = re.search(
+        r"(?mi)^[ \t]*Target:[ \t]*~?([0-9]+(?:,[0-9]{3})*)"
+        r"(?:[ \t]*[–-][ \t]*([0-9]+(?:,[0-9]{3})*))?[ \t]+words\b",
+        plain,
+    )
+    if not match:
+        return None
+    low = int(match.group(1).replace(",", ""))
+    high = int((match.group(2) or match.group(1)).replace(",", ""))
+    return low, high
+
+
 def validate_brief(content, content_type, candidates, plan):
     """Enforce observable structure and link constraints; editorial review is still needed."""
     content = normalize_brief_headings(content)
@@ -1749,7 +1764,7 @@ def validate_brief(content, content_type, candidates, plan):
         end = h2s[index + 1].start() if index + 1 < len(h2s) else len(outline)
         section = outline[match.end():end]
         section_intro = re.split(r"(?m)^#{1,4}\s+", section, maxsplit=1)[0]
-        if not re.search(r"Target:\s*~?[\d,]+\s*[–-]\s*[\d,]+\s+words", section_intro):
+        if parse_word_budget(section_intro) is None:
             errors.append(f"Missing word budget: {match.group(1)}")
         if not re.search(r"\*?\*?Visual:\*?\*?", section):
             errors.append(f"Missing Visual line: {match.group(1)}")
@@ -1758,10 +1773,10 @@ def validate_brief(content, content_type, candidates, plan):
     for match in re.finditer(r"(?m)^#{1,2}\s+.+$", outline):
         following = outline[match.end():]
         section = re.split(r"(?m)^#{1,4}\s+", following, maxsplit=1)[0]
-        target = re.search(r"Target:\s*~?([\d,]+)\s*[–-]\s*([\d,]+)\s+words", section)
+        target = parse_word_budget(section)
         if target:
-            targets.append(tuple(int(v.replace(",", "")) for v in target.groups()))
-    if targets and (any(a > b for a, b in targets) or
+            targets.append(target)
+    if targets and (any(a <= 0 or a > b for a, b in targets) or
                     sum(a for a, b in targets) < plan["minimum"] or
                     sum(b for a, b in targets) > plan["maximum"]):
         errors.append("Top-level word budgets do not fit the selected MSV tier")
@@ -1800,8 +1815,11 @@ def validate_brief(content, content_type, candidates, plan):
         seen.add(url)
         heading = cells[0].strip("*")
         placements[heading] = placements.get(heading, 0) + 1
-        if heading not in heading_names or placements[heading] > 2:
-            errors.append("Internal link has invalid H2 placement")
+        if heading not in heading_names:
+            errors.append(f"Internal link has invalid H2 placement: {heading!r} does not "
+                          "match an article H2; copy the exact heading from the outline")
+        if placements[heading] > 2:
+            errors.append(f"Internal link has invalid H2 placement: more than two links in {heading!r}")
     if len(seen) > 5:
         errors.append("More than five internal links")
     if not candidates and "no verified internal link candidates" not in links.lower():
@@ -1913,6 +1931,9 @@ Higher authority competitors require deeper, more comprehensive content to compe
 
 These pages were selected deterministically from the verified PingCAP sitemap inventory.
 Use only these URLs in the Internal Links table. Do not invent, alter, or guess a path.
+Finalize the outline first, then copy each H2 heading verbatim into the Section (H2)
+column of the Internal Links table. Do not use a topic label, paraphrase, or an earlier
+heading draft. Recheck every table row against the final heading list before returning.
 Map each selected URL to an exact H2 in the outline, use each URL once, place no more
 than two links in one H2, and preserve the purpose in the selection_rule field.
 If the list is empty, state that the sitemap inventory returned no verified candidates
@@ -2810,4 +2831,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
