@@ -1,5 +1,7 @@
 """Exercise production functions without requiring credentials or optional SDK imports."""
 import ast
+import os
+import tempfile
 import json
 import re
 import types
@@ -12,7 +14,7 @@ import requests
 
 SOURCE = Path(__file__).resolve().parents[1] / 'brief.py'
 tree = ast.parse(SOURCE.read_text())
-FUNCTIONS = {'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
+FUNCTIONS = {'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
              'check_pingcap_ranking', 'get_semrush_keyword_gap', 'get_serp_and_paa',
              'generate_brief', 'semrush_get', 'summarize_title', 'url_domain'}
 CONSTANTS = {'_BRIEF_SECTIONS', '_BASE_INSTRUCTIONS', '_QUALITY_CHECKLIST'}
@@ -21,7 +23,7 @@ selected = [n for n in tree.body if
             isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in CONSTANTS for t in n.targets)]
 
 def namespace():
-    ns = {'re': re, 'json': json, 'requests': requests, 'urlparse': urlparse, 'PINGCAP_DOMAIN': 'pingcap.com', 'SEMRUSH_API_KEY': 'test'}
+    ns = {'os': os, 'tempfile': tempfile, 're': re, 'json': json, 'requests': requests, 'urlparse': urlparse, 'PINGCAP_DOMAIN': 'pingcap.com', 'SEMRUSH_API_KEY': 'test'}
     exec(compile(ast.Module(body=selected, type_ignores=[]), str(SOURCE), 'exec'), ns)
     return ns
 
@@ -125,10 +127,15 @@ class OutputTests(unittest.TestCase):
     def test_truncation_rejected(self):
         ns=namespace();ns.update(ANTHROPIC_API_KEY='test',ANTHROPIC_MODEL='test',
             load_brief_examples=lambda:'',load_feedback=lambda:'',build_system_prompt=lambda *args:'prompt')
-        client=Mock();client.messages.create.return_value=types.SimpleNamespace(stop_reason='max_tokens')
+        client=Mock();client.messages.create.return_value=types.SimpleNamespace(stop_reason='max_tokens', content=[types.SimpleNamespace(type='text', text='Partial output')])
         ns['anthropic']=Mock();ns['anthropic'].Anthropic.return_value=client
-        with self.assertRaisesRegex(ValueError,'incomplete'):
-            ns['generate_brief']('scaling','blog',[],[],[],[])
+        with tempfile.TemporaryDirectory() as folder:
+            ns['os'] = Mock(getenv=lambda key: None, getcwd=lambda: folder, path=os.path)
+            with self.assertRaisesRegex(ValueError,'incomplete'):
+                ns['generate_brief']('scaling','blog',[],[],[],[])
+            drafts = list(Path(folder).glob('brief_failed_*/draft.md'))
+            self.assertEqual(len(drafts), 1)
+            self.assertIn('Partial output', drafts[0].read_text())
     def test_complete_generation_and_title(self):
         ns=namespace();ns.update(ANTHROPIC_API_KEY='test',ANTHROPIC_MODEL='test',
             ANTHROPIC_HAIKU_MODEL='title',load_brief_examples=lambda:'',load_feedback=lambda:'',
@@ -143,6 +150,36 @@ class OutputTests(unittest.TestCase):
         client.messages.create.return_value=types.SimpleNamespace(content=[types.SimpleNamespace(text=' A title ')])
         self.assertEqual(ns['summarize_title']('topic'),'A title')
 
+    def test_format_variants_do_not_count_as_article_h2s(self):
+        ns = namespace()
+        text = valid_brief(ns).replace('## Scaling', '# Article title\nTarget: ~100–100 words\n## Scaling')
+        text = text.replace('1800–2500', '1700–2400')
+        text = text.replace('### Schema Markup Recommendations',
+                            '## Visual Recommendations Summary\nNotes.\n### Schema Markup Recommendations')
+        variant = text.replace('# Article title', '## H1: Article title')
+        self.assertEqual(ns['validate_brief'](variant, 'blog', [], {'minimum':1800,'maximum':2500}), [])
+        normalized = ns['normalize_brief_headings'](variant)
+        self.assertIn('# Article title', normalized)
+        self.assertNotIn('## Visual Recommendations Summary', normalized)
+        self.assertEqual(ns['normalize_brief_headings'](normalized), normalized)
+
+    def test_normalization_preserves_code_and_other_sections(self):
+        ns = namespace()
+        for fence in ['```', '~~~']:
+            sample = fence + '\n## H1: example\n## Visual Recommendations Summary\n' + fence
+            text = valid_brief(ns).replace('## Scaling', sample + '\n## Scaling')
+            text += '\n## H1: outside outline\n'
+            self.assertEqual(ns['normalize_brief_headings'](text), text)
+            self.assertEqual(ns['validate_brief'](text, 'blog', [], {'minimum':1800,'maximum':2500}), [])
+
+    def test_comparison_allocations_fit_every_tier(self):
+        ns = namespace()
+        for volume in [None, 20, 500, 2000, 5000]:
+            plan = ns['word_count_plan']([], {'intent':{'search_volume':volume}}, 'comparison')
+            self.assertEqual(sum(plan['section_budgets'].values()), plan['article_target'])
+            self.assertLessEqual(plan['article_target'], plan['maximum'])
+            self.assertEqual(list(plan['section_budgets'])[2], 'At a glance')
+
     def test_prompt_conflicts_removed(self):
         ns=namespace();prompt=ns['_BASE_INSTRUCTIONS']+ns['_QUALITY_CHECKLIST']
         self.assertNotIn('2,000–5,000',prompt)
@@ -151,3 +188,4 @@ class OutputTests(unittest.TestCase):
         self.assertIn('12 for listicles',prompt)
 
 if __name__=='__main__':unittest.main()
+
