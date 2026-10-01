@@ -858,7 +858,12 @@ data. Never invent, alter, or guess a URL. If no candidates were supplied, write
 "No verified internal link candidates returned — refresh the sitemap inventory"
 instead of creating links.
 
-Map every link to the exact text of a named H2 in the outline. Use each target URL
+In the Section (H2) cell, output only the H2 ID: h2_1 for the first article H2,
+h2_2 for the second, and so on in the FINAL outline order. Count only article H2s,
+not the H1, H3s, brief metadata headings, or headings inside code samples. Finalize
+the outline before assigning IDs. Do not include the heading text or a paraphrase
+in this cell. Python assigns these same IDs and renders the final heading text.
+For example, a link to the sixth article H2 must use h2_6. Use each target URL
 only once, place no more than two links in any H2, and keep anchor text descriptive
 and natural rather than exact-match stuffed. Preserve the deterministic slot purpose
 shown in each candidate's selection_rule field. The Why column must explain in one
@@ -1455,7 +1460,7 @@ fails a check before proceeding. Do not output a brief that fails any check.
 5.  Internal links are presented as a four-column Markdown table: Section (H2),
     Anchor text, Target URL, and Why. The table contains no more than five unique
     target URLs, every URL appears in the supplied candidate list, every link maps
-    to an exact H2 in the outline, no H2 receives more than two links, and every Why
+    to a valid h2_N ID in final article H2 order, no H2 receives more than two links, and every Why
     cell contains a one-sentence rationale. If no candidates were supplied, the brief
     says so explicitly instead of inventing URLs.
 6.  Meta title is <=60 characters, includes the target keyword, and contains NO year (e.g. "2024", "2025"). Year references date quickly — remove them.
@@ -1726,6 +1731,39 @@ def normalize_brief_headings(content):
     return content
 
 
+def resolve_internal_link_ids(content):
+    """Render final article headings from ordinal IDs; leave unknown IDs for validation."""
+    sections = brief_sections(content)
+    outlines = [(body, end) for name, start, end, body in sections if name == "Outline / Headings"]
+    links = [(body, end) for name, start, end, body in sections if name == "Internal Links"]
+    if len(outlines) != 1 or len(links) != 1:
+        return content
+    start, end = outlines[0]
+    headings = []
+    fence = None
+    for line in content[start:end].splitlines():
+        marker = re.match(r"^[ \t]*(`{3,}|~{3,})", line)
+        if marker:
+            token = marker.group(1)
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence):
+                fence = None
+            continue
+        match = re.match(r"^##[ \t]+(.+)$", line)
+        if fence is None and match:
+            headings.append(match.group(1).strip().strip("*"))
+    mapping = {f"h2_{i}": title for i, title in enumerate(headings, 1)}
+    start, end = links[0]
+    # Change only the first table cell. URLs, anchors, and rationales are untouched.
+    def render(match):
+        key = match.group(2).strip()
+        return match.group(1) + mapping.get(key, key) + match.group(3)
+    table = re.sub(r"(?m)^([ \t]*\|[ \t]*)(h2_[0-9]+)([ \t]*\|)",
+                   render, content[start:end])
+    return content[:start] + table + content[end:]
+
+
 def parse_word_budget(text):
     """Read a standalone Target line; a single value is an exact min/max budget."""
     plain = text.replace("**", "").replace("__", "")
@@ -1743,7 +1781,7 @@ def parse_word_budget(text):
 
 def validate_brief(content, content_type, candidates, plan):
     """Enforce observable structure and link constraints; editorial review is still needed."""
-    content = normalize_brief_headings(content)
+    content = resolve_internal_link_ids(normalize_brief_headings(content))
     errors = []
     sections = brief_sections(content)
     names = [name for name, *_ in sections]
@@ -1817,7 +1855,7 @@ def validate_brief(content, content_type, candidates, plan):
         placements[heading] = placements.get(heading, 0) + 1
         if heading not in heading_names:
             errors.append(f"Internal link has invalid H2 placement: {heading!r} does not "
-                          "match an article H2; copy the exact heading from the outline")
+                          "match an article H2; use a valid h2_N ID from the final outline")
         if placements[heading] > 2:
             errors.append(f"Internal link has invalid H2 placement: more than two links in {heading!r}")
     if len(seen) > 5:
@@ -1931,10 +1969,10 @@ Higher authority competitors require deeper, more comprehensive content to compe
 
 These pages were selected deterministically from the verified PingCAP sitemap inventory.
 Use only these URLs in the Internal Links table. Do not invent, alter, or guess a path.
-Finalize the outline first, then copy each H2 heading verbatim into the Section (H2)
-column of the Internal Links table. Do not use a topic label, paraphrase, or an earlier
-heading draft. Recheck every table row against the final heading list before returning.
-Map each selected URL to an exact H2 in the outline, use each URL once, place no more
+Finalize the outline first. In each Section (H2) cell use only h2_N, where N is the
+1-based position of the article H2 in the final outline. Do not repeat or paraphrase
+its heading text. Python maps that ID to the heading for the exported table.
+Use each URL once, place no more
 than two links in one H2, and preserve the purpose in the selection_rule field.
 If the list is empty, state that the sitemap inventory returned no verified candidates
 and do not create an internal link.
@@ -1984,7 +2022,7 @@ and do not create an internal link.
     if message.stop_reason != "end_turn":
         errors.append(f"Brief generation incomplete: {message.stop_reason}")
     else:
-        text = normalize_brief_headings(text)
+        text = resolve_internal_link_ids(normalize_brief_headings(text))
         errors = validate_brief(text, content_type, internal_link_candidates or [], plan)
     if errors:
         # Preserve paid generation output and research before rejecting the brief.
@@ -2831,5 +2869,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
