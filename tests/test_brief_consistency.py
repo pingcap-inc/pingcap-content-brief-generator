@@ -14,7 +14,7 @@ import requests
 
 SOURCE = Path(__file__).resolve().parents[1] / 'brief.py'
 tree = ast.parse(SOURCE.read_text())
-FUNCTIONS = {'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
+FUNCTIONS = {'resolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
              'check_pingcap_ranking', 'get_semrush_keyword_gap', 'get_serp_and_paa',
              'generate_brief', 'semrush_get', 'summarize_title', 'url_domain'}
 CONSTANTS = {'_BRIEF_SECTIONS', '_BASE_INSTRUCTIONS', '_QUALITY_CHECKLIST'}
@@ -209,7 +209,52 @@ class OutputTests(unittest.TestCase):
         text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
             '| Wrong heading | Learn | ' + url + ' | Reason |')
         errors = ns['validate_brief'](text, 'blog', [{'url':url}], {'minimum':1800,'maximum':2500})
-        self.assertTrue(any("'Wrong heading'" in e and 'copy the exact heading' in e for e in errors))
+        self.assertTrue(any("'Wrong heading'" in e and 'valid h2_N ID' in e for e in errors))
+
+    def test_link_ids_render_final_headings_and_preserve_other_cells(self):
+        ns = namespace()
+        url = 'https://www.pingcap.com/example/'
+        text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+            '| Section (H2) | Anchor text | Target URL | Why |\n| h2_1 | Learn h2_1 | ' + url + ' | Reason h2_1 |')
+        text = text.replace('## Scaling', '## A newly worded heading')
+        resolved = ns['resolve_internal_link_ids'](text)
+        self.assertIn('| A newly worded heading | Learn h2_1 | ' + url + ' | Reason h2_1 |', resolved)
+        self.assertEqual(ns['resolve_internal_link_ids'](resolved), resolved)
+        self.assertEqual(ns['validate_brief'](text, 'blog', [{'url':url}], {'minimum':1800,'maximum':2500}), [])
+        for fence in ['```', '~~~']:
+            sample = text.replace('## A newly worded heading', '# Intro\n### Subheading\n' + fence + '\n## Sample\n' + fence + '\n## A newly worded heading')
+            self.assertIn('| A newly worded heading |', ns['resolve_internal_link_ids'](sample))
+        for bad in ['h2_0', 'h2_99', 'h2_01', 'h2_x']:
+            errors = ns['validate_brief'](text.replace('| h2_1 |', '| '+bad+' |'), 'blog', [{'url':url}], {'minimum':1800,'maximum':2500})
+            self.assertTrue(any('invalid H2 placement' in e for e in errors))
+
+    def test_generation_exports_rendered_link_heading(self):
+        ns = namespace()
+        ns.update(ANTHROPIC_API_KEY='test', ANTHROPIC_MODEL='test',
+                  load_brief_examples=lambda:'', load_feedback=lambda:'',
+                  build_system_prompt=lambda *args:'prompt')
+        url = 'https://www.pingcap.com/example/'
+        text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+                                       '| h2_1 | Learn | '+url+' | Reason |')
+        client = Mock()
+        client.messages.create.return_value = types.SimpleNamespace(stop_reason='end_turn',
+            content=[types.SimpleNamespace(type='text', text=text)])
+        ns['anthropic'] = Mock()
+        ns['anthropic'].Anthropic.return_value = client
+        result = ns['generate_brief']('scaling','blog',[],[],[],[], internal_link_candidates=[{'url':url}])
+        self.assertIn('| Scaling | Learn |', result)
+        self.assertNotIn('| h2_1 |', result)
+        self.assertEqual(client.messages.create.call_count, 1)
+
+    def test_link_id_placement_cap_and_duplicate_urls(self):
+        ns = namespace()
+        urls = ['https://www.pingcap.com/'+str(i)+'/' for i in range(3)]
+        text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+            '\n'.join('| h2_1 | Learn | '+url+' | Reason |' for url in urls))
+        errors = ns['validate_brief'](text, 'blog', [{'url':url} for url in urls], {'minimum':1800,'maximum':2500})
+        self.assertTrue(any('more than two links' in e for e in errors))
+        errors = ns['validate_brief'](text.replace(urls[1],urls[0]), 'blog', [{'url':url} for url in urls], {'minimum':1800,'maximum':2500})
+        self.assertIn('Unverified or duplicate internal link', errors)
 
     def test_prompt_conflicts_removed(self):
         ns=namespace();prompt=ns['_BASE_INSTRUCTIONS']+ns['_QUALITY_CHECKLIST']
@@ -219,5 +264,6 @@ class OutputTests(unittest.TestCase):
         self.assertIn('12 for listicles',prompt)
 
 if __name__=='__main__':unittest.main()
+
 
 
