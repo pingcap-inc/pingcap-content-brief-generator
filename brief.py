@@ -1687,14 +1687,28 @@ _BRIEF_SECTIONS = (
 )
 
 
+def markdown_lines(content):
+    """Yield lines and fence state using the same rules for all outline consumers."""
+    fence = None
+    for line in content.splitlines(keepends=True):
+        marker = re.match(r"^[ \t]*(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
+        inside = fence is not None
+        if marker:
+            token, rest = marker.groups()
+            if fence is None:
+                if token[0] != "`" or "`" not in rest:
+                    fence = token
+                    inside = True
+            elif token[0] == fence[0] and len(token) >= len(fence) and not rest.strip():
+                fence = None
+        yield line, inside
+
+
 def brief_sections(content):
     """Recognize named brief boundaries without confusing article H2/H3 headings."""
     markers = []
-    fenced = False
     offset = 0
-    for line in content.splitlines(keepends=True):
-        if line.lstrip().startswith(("```", "~~~")):
-            fenced = not fenced
+    for line, fenced in markdown_lines(content):
         match = re.match(r"^#{1,6}\s+(.+?)\s*#*\s*$", line.strip())
         if match and not fenced:
             title = match.group(1).strip().strip("*")
@@ -1711,18 +1725,8 @@ def normalize_brief_headings(content):
         if name != "Outline / Headings":
             continue
         lines = []
-        fence = None
-        for line in content[body:end].splitlines(keepends=True):
-            marker = re.match(r"^\s*(`{3,}|~{3,})", line)
-            if marker:
-                token = marker.group(1)
-                if fence is None:
-                    fence = token
-                elif token[0] == fence[0] and len(token) >= len(fence):
-                    fence = None
-                lines.append(line)
-                continue
-            if fence is None:
+        for line, fenced in markdown_lines(content[body:end]):
+            if not fenced:
                 line = re.sub(r"^#{1,3}\s+H1:\s*", "# ", line, flags=re.I)
                 line = re.sub(r"^##\s+Visual Recommendations Summary\s*(?:\n|$)",
                               "**Visual Recommendations Summary**\n", line, flags=re.I)
@@ -1740,26 +1744,21 @@ def resolve_internal_link_ids(content):
         return content
     start, end = outlines[0]
     headings = []
-    fence = None
-    for line in content[start:end].splitlines():
-        marker = re.match(r"^[ \t]*(`{3,}|~{3,})", line)
-        if marker:
-            token = marker.group(1)
-            if fence is None:
-                fence = token
-            elif token[0] == fence[0] and len(token) >= len(fence):
-                fence = None
-            continue
+    for line, fenced in markdown_lines(content[start:end]):
         match = re.match(r"^##[ \t]+(.+)$", line)
-        if fence is None and match:
+        if not fenced and match:
             headings.append(match.group(1).strip().strip("*"))
     mapping = {f"h2_{i}": title for i, title in enumerate(headings, 1)}
     start, end = links[0]
     # Change only the first table cell. URLs, anchors, and rationales are untouched.
     def render(match):
         key = match.group(2).strip()
-        return match.group(1) + mapping.get(key, key) + match.group(3)
-    table = re.sub(r"(?m)^([ \t]*\|[ \t]*)(h2_[0-9]+)([ \t]*\|)",
+        for wrapper in ("**", "__", "`"):
+            if key.startswith(wrapper) and key.endswith(wrapper):
+                key = key[len(wrapper):-len(wrapper)].strip()
+                break
+        return match.group(1) + mapping.get(key, match.group(2)) + match.group(3)
+    table = re.sub(r"(?m)^([ \t]*\|[ \t]*)((?:h2_[0-9]+|\*\*h2_[0-9]+\*\*|__h2_[0-9]+__|`h2_[0-9]+`))([ \t]*\|)",
                    render, content[start:end])
     return content[:start] + table + content[end:]
 
@@ -1790,7 +1789,7 @@ def validate_brief(content, content_type, candidates, plan):
     bodies = {name: content[body:end] for name, start, end, body in sections}
     outline = bodies.get("Outline / Headings", "")
     # Fenced SQL/Markdown samples are not outline headings.
-    outline = re.sub(r"(?ms)^[ \t]*(`{3,}|~{3,})[^\n]*\n.*?^[ \t]*\1[ \t]*$", "", outline)
+    outline = "".join("\n" if fenced else line for line, fenced in markdown_lines(outline))
     h2s = list(re.finditer(r"(?m)^##\s+(.+)$", outline))
     if not 1 <= len(h2s) <= (12 if content_type == "listicle" else 10):
         errors.append("Invalid number of article H2s")
@@ -1814,6 +1813,8 @@ def validate_brief(content, content_type, candidates, plan):
         target = parse_word_budget(section)
         if target:
             targets.append(target)
+        elif match.group(0).startswith("# "):
+            errors.append("Missing word budget: H1 introduction")
     if targets and (any(a <= 0 or a > b for a, b in targets) or
                     sum(a for a, b in targets) < plan["minimum"] or
                     sum(b for a, b in targets) > plan["maximum"]):
@@ -1858,6 +1859,8 @@ def validate_brief(content, content_type, candidates, plan):
                           "match an article H2; use a valid h2_N ID from the final outline")
         if placements[heading] > 2:
             errors.append(f"Internal link has invalid H2 placement: more than two links in {heading!r}")
+    if candidates and not (seen & allowed):
+        errors.append("Internal Links table contains no verified link recommendations")
     if len(seen) > 5:
         errors.append("More than five internal links")
     if not candidates and "no verified internal link candidates" not in links.lower():
@@ -2869,6 +2872,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
