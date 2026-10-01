@@ -14,7 +14,7 @@ import requests
 
 SOURCE = Path(__file__).resolve().parents[1] / 'brief.py'
 tree = ast.parse(SOURCE.read_text())
-FUNCTIONS = {'markdown_lines', 'resolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
+FUNCTIONS = {'validate_serp_blocks', 'markdown_lines', 'resolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
              'check_pingcap_ranking', 'get_semrush_keyword_gap', 'get_serp_and_paa',
              'generate_brief', 'semrush_get', 'summarize_title', 'url_domain'}
 CONSTANTS = {'_BRIEF_SECTIONS', '_BASE_INSTRUCTIONS', '_QUALITY_CHECKLIST'}
@@ -290,6 +290,32 @@ class OutputTests(unittest.TestCase):
         self.assertNotIn('\\_',env)
         self.assertIn('ANTHROPIC_MODEL=claude-sonnet-4-6',env)
         self.assertIn('DRIVE_FOLDER_ID=',env)
+
+
+    def test_serp_heading_variants_and_table(self):
+        ns = namespace()
+        table = '| # | Page | Key Angle |\n|---|---|---|\n| 1 | Example | Specific angle |\n'
+        for title in ['### Block 1 — Top Ranking Pages', '**Block 1 — Top ranking pages table**',
+                      '### SERP Competitor Table', '**### Block 1 — Top Ranking Pages**']:
+            preamble = title + '\n' + table + '\n### Block 2 — Patterns Favored by AI Overviews & LLMs\n- Observed pattern.\n'
+            self.assertEqual(ns['validate_serp_blocks'](preamble + '# Article\n'), [])
+        text = valid_brief(ns).replace('**Block 1 — Top ranking pages table**\nNo SERP data returned',
+                                     '### Block 1 — Top Ranking Pages\n' + table)
+        self.assertEqual(ns['validate_brief'](text, 'blog', [], {'minimum':1800,'maximum':2500}), [])
+
+    def test_serp_blocks_require_structure_and_content(self):
+        ns = namespace()
+        base = ('### Top Ranking Pages\nNo SERP data returned — manual review recommended\n'
+                '### Patterns Favored by AI Overviews & LLMs\nInsufficient SERP data\n')
+        self.assertEqual(ns['validate_serp_blocks'](base), [])
+        for invalid in [base.replace('No SERP data returned — manual review recommended',''),
+                        base.replace('Insufficient SERP data',''),
+                        base.replace('### Top Ranking Pages','### Unrelated'),
+                        '# Article\n' + base,
+                        base + base,
+                        base.replace('No SERP data returned — manual review recommended',
+                                     '| # | Page | Key Angle |\n|---|---|---|')]:
+            self.assertTrue(ns['validate_serp_blocks'](invalid))
 
     def test_prompt_conflicts_removed(self):
         ns=namespace();prompt=ns['_BASE_INSTRUCTIONS']+ns['_QUALITY_CHECKLIST']
