@@ -179,9 +179,20 @@ Failed lookups remain unknown. These checks add SEMrush requests and API usage.
 Before export, structural validation checks section order, H2 limits, second-H2
 comparison placement, word budgets, visual-line presence, metadata lengths, URL
 structure, and supplied internal-link URLs and placements. Truncated responses or
-validation failures stop the run with an error. These checks do not certify factual
+validation failures stop the run with an error after preserving `draft.md`,
+`validation.json`, and `research.md` in a unique local `brief_failed_*` folder.
+Brief generation defaults to 16,000 output tokens; override with a positive integer
+in `ANTHROPIC_MAX_TOKENS` in your local `.env` (title generation remains at 50).
+Known outline formatting variants (`## H1:` and a visual-summary heading) are
+normalized before validation and export, without changing article content or budgets.
+Comparison briefs receive calculated section allocations totaling the selected
+article target. Real budget overruns still fail validation; no automatic paid retry
+is made. SERP instructions preserve ranks, identify owned coverage, distinguish
+Google AI Overview evidence from other mentions, and prohibit unsupported citation
+causality or ranking-time claims. These checks do not certify factual
 accuracy, customer evidence, or every editorial instruction; human review is still
 required. Google Docs separates the outline from trailing metadata using named
 section boundaries at any supported Markdown heading level.
 
 Run regression checks with `python3 -m unittest discover -s tests -v`.
+
