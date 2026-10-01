@@ -967,6 +967,11 @@ SERP data, LLM mentions data, and competitor headings provided, write 4–6 bull
 - Editorial warnings specific to this topic (e.g. "benchmark claims require dated sources")
 
 Ground this in the actual SERP and competitor data provided — do not invent patterns.
+An empty featured_snippet array means no featured-snippet evidence was returned in
+this snapshot, not that no snippet exists or that the position is available to win.
+Describe missing comparisons as potential gaps in the supplied sample, not proof
+that no comparison article exists. Do not claim a confirmed first-mover advantage.
+Observed formats do not establish why Google selected content or guarantee citation.
 Only describe AI Overview wording or snippet ownership when the supplied SERP Features
 contain that evidence. Empty arrays or missing text mean evidence unavailable: say
 "AI Overview data unavailable" or "Featured-snippet data unavailable" as applicable.
@@ -1778,6 +1783,45 @@ def parse_word_budget(text):
     return low, high
 
 
+def validate_serp_blocks(outline):
+    """Accept presentation variants while requiring both pre-outline blocks."""
+    preamble = re.split(r"(?m)^#{1,2}[ \t]+", outline, maxsplit=1)[0]
+    markers = []
+    for match in re.finditer(r"(?m)^.*$", preamble):
+        title = match.group(0).strip().strip("*").strip()
+        title = re.sub(r"^#{1,6}\s+", "", title).strip().strip("*").strip()
+        title = re.sub(r"(?i)^block\s+[12]\s*[-–—:]\s*", "", title)
+        title = re.sub(r"\s+", " ", title).casefold()
+        if re.fullmatch(r"top[- ]ranking pages(?: table)?|serp competitor table", title):
+            markers.append(("serp", match.start(), match.end()))
+        elif re.fullmatch(r"patterns favou?red by ai overviews?(?:\s*(?:&|and)\s*llms)?", title):
+            markers.append(("ai", match.start(), match.end()))
+    if [kind for kind, *_ in markers] != ["serp", "ai"]:
+        return ["Missing, duplicated, or out-of-order SERP competitor or AI Overview block"]
+    table_text = preamble[markers[0][2]:markers[1][1]]
+    ai_text = preamble[markers[1][2]:].strip()
+    rows = [[cell.strip() for cell in line.strip().strip("|").split("|")]
+            for line in table_text.splitlines() if line.strip().startswith("|")]
+    table_ok = False
+    for i in range(len(rows) - 2):
+        header, separator, data = rows[i:i + 3]
+        if ([cell.casefold() for cell in header] == ["#", "page", "key angle"]
+                and len(separator) == 3
+                and all(re.fullmatch(r":?-{3,}:?", cell) for cell in separator)
+                and len(data) == 3 and all(data)
+                and not all(re.fullmatch(r"[-:]+", cell) for cell in data)):
+            table_ok = True
+            break
+    errors = []
+    if not table_ok and not re.search(
+            r"(?i)\b(?:no serp data returned|serp data (?:is )?(?:unavailable|empty))\b",
+            table_text):
+        errors.append("SERP competitor block needs a populated # / Page / Key Angle table or an unavailable-data notice")
+    if not ai_text:
+        errors.append("AI Overview block is empty; provide analysis or an unavailable-data notice")
+    return errors
+
+
 def validate_brief(content, content_type, candidates, plan):
     """Enforce observable structure and link constraints; editorial review is still needed."""
     content = resolve_internal_link_ids(normalize_brief_headings(content))
@@ -1819,8 +1863,7 @@ def validate_brief(content, content_type, candidates, plan):
                     sum(a for a, b in targets) < plan["minimum"] or
                     sum(b for a, b in targets) > plan["maximum"]):
         errors.append("Top-level word budgets do not fit the selected MSV tier")
-    if "Top ranking pages table" not in outline or "Patterns Favored by AI Overviews" not in outline:
-        errors.append("Missing SERP competitor or AI Overview block")
+    errors.extend(validate_serp_blocks(outline))
     meta = bodies.get("Meta Elements", "")
     for label, maximum in [("Meta Title", 60), ("Meta Description", 155)]:
         match = re.search(rf"(?mi)^\|\s*{label}\s*\|\s*(.*?)\s*\|", meta)
