@@ -1,0 +1,53 @@
+# Product facts the brief is checked against. Each check type is implemented
+# in brief_quality.py: forbidden_pattern, number_in_context, sql_vector_nullsafe.
+facts:
+  - id: tidb_cloud_zero_api
+    statement: >-
+      The TiDB Cloud Zero API is POST https://zero.tidbapi.com/v1beta1/instances.
+      v1alpha1 is deprecated. zero.tidbcloud.com is the homepage, not the API.
+    checks:
+      - type: forbidden_pattern
+        pattern: '(?i)zero\.tidbcloud\.com/v\d'
+        message: zero.tidbcloud.com is the homepage; the API host is zero.tidbapi.com.
+      - type: forbidden_pattern
+        pattern: '(?i)\b(?:POST|GET|curl)\b[^\n]{0,40}zero\.tidbcloud\.com'
+        message: API calls go to https://zero.tidbapi.com/v1beta1/instances, not zero.tidbcloud.com.
+      - type: forbidden_pattern
+        pattern: '(?i)\bv1alpha1\b'
+        message: The v1alpha1 TiDB Cloud Zero API is deprecated; use v1beta1.
+
+  - id: tidb_cloud_zero_expiry
+    statement: >-
+      TiDB Cloud Zero instances auto-expire after 30 days unless claimed.
+      Claiming takes three clicks, converts the instance to TiDB Cloud Starter,
+      and migrates the data.
+    checks:
+      - type: number_in_context
+        context: '(?i)(?:tidb cloud zero|zero instance)[^.\n]{0,120}(?:expir|delet|day)'
+        pattern: '(?i)\b(\d+)[- ]days?\b'
+        expected: [30]
+        message: TiDB Cloud Zero instances expire after 30 days unless claimed.
+      - type: number_in_context
+        context: '(?i)(?:tidb cloud zero|zero instance)[^.\n]{0,120}\bclick'
+        pattern: '(?i)\b(\d+|one|two|three|four|five)\s+clicks?\b'
+        expected: [3, three]
+        message: Claiming a TiDB Cloud Zero instance takes three clicks.
+      - type: forbidden_pattern
+        pattern: '(?i)\bclaim[^.\n]{0,80}\bconvert[^.\n]{0,40}\btidb cloud (?:serverless|dedicated|essential)\b'
+        message: A claimed TiDB Cloud Zero instance converts to TiDB Cloud Starter.
+
+  - id: tidb_vector_distance
+    statement: >-
+      TiDB vector distance uses functions such as VEC_COSINE_DISTANCE and
+      VEC_L2_DISTANCE. In TiDB/MySQL, <=> is the NULL-safe equality operator;
+      using it for vector distance is pgvector syntax only.
+    checks:
+      - type: sql_vector_nullsafe
+        message: "<=> is NULL-safe equality in TiDB/MySQL; use VEC_COSINE_DISTANCE or VEC_L2_DISTANCE."
+
+# Snippet languages treated as TiDB/MySQL, and ones that are explicitly not.
+sql:
+  tidb_languages: [sql, mysql, tidb]
+  other_languages: [postgres, postgresql, pgsql, pgvector, plpgsql]
+  context_pattern: '(?i)\b(?:tidb|mysql)\b'
+  vector_column_pattern: '(?i)(?:embedding|vector|vec)'

@@ -14,13 +14,16 @@ import requests
 
 SOURCE = Path(__file__).resolve().parents[1] / 'brief.py'
 tree = ast.parse(SOURCE.read_text())
-FUNCTIONS = {'validate_serp_blocks', 'markdown_lines', 'resolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
+FUNCTIONS = {'_save_failed_brief', 'validate_serp_blocks', 'markdown_lines', 'resolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
              'check_pingcap_ranking', 'get_semrush_keyword_gap', 'get_serp_and_paa',
              'generate_brief', 'semrush_get', 'summarize_title', 'url_domain'}
 CONSTANTS = {'_BRIEF_SECTIONS', '_BASE_INSTRUCTIONS', '_QUALITY_CHECKLIST'}
 selected = [n for n in tree.body if
             isinstance(n, ast.FunctionDef) and n.name in FUNCTIONS or
             isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in CONSTANTS for t in n.targets)]
+
+SEED = [{'is_seed': True, 'keyword': 'scaling', 'search_volume': 100}]
+
 
 def namespace():
     ns = {'os': os, 'tempfile': tempfile, 're': re, 'json': json, 'requests': requests, 'urlparse': urlparse, 'PINGCAP_DOMAIN': 'pingcap.com', 'SEMRUSH_API_KEY': 'test'}
@@ -31,7 +34,7 @@ def namespace():
 def valid_brief(ns):
     bodies = {name: 'Guidance.' for name in ns['_BRIEF_SECTIONS']}
     bodies['Meta Elements'] = '| Meta Title | Scaling guide |\n| Meta Description | A scaling guide. |\n| URL Structure | /blog/scaling/ |'
-    bodies['Internal Links'] = 'No verified internal link candidates returned — refresh the sitemap inventory'
+    bodies['Internal Links'] = 'No verified internal link candidates returned; refresh the sitemap inventory'
     bodies['Outline / Headings'] = ('**Block 1 — Top ranking pages table**\nNo SERP data returned\n'
         '**Block 2 — Patterns Favored by AI Overviews & LLMs**\nInsufficient SERP data\n'
         '## Scaling\nTarget: ~1800–2500 words\n**Visual:** None needed\n')
@@ -51,7 +54,9 @@ class BudgetTests(unittest.TestCase):
         rows = [{'search_volume':9000}, {'is_seed':True,'search_volume':800}]
         self.assertEqual(fn(rows, None, 'blog')['primary_keyword_msv'],800)
         self.assertEqual(fn(rows, {'intent':{'search_volume':'0'}}, 'blog')['source'],'SEMrush')
-        self.assertIsNone(fn(rows[:1], None, 'blog')['primary_keyword_msv'])
+        self.assertEqual(fn(rows, None, 'blog', primary_msv=320)['source'], 'Stage 0 (DataForSEO Google Ads)')
+        with self.assertRaisesRegex(ValueError, 'MSV is unavailable'):
+            fn(rows[:1], None, 'blog')  # No N/A tier: a measured MSV is required.
 
 
 class ResearchTests(unittest.TestCase):
@@ -120,7 +125,7 @@ class OutputTests(unittest.TestCase):
         errors=ns['validate_brief'](text,'blog',[],{'minimum':1800,'maximum':2500})
         self.assertTrue(any('sections' in e for e in errors));self.assertTrue(any('budgets' in e for e in errors))
     def test_validator_rejects_invented_links(self):
-        ns=namespace();text=valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+        ns=namespace();text=valid_brief(ns).replace('No verified internal link candidates returned; refresh the sitemap inventory',
             '| Section (H2) | Anchor text | Target URL | Why |\n|---|---|---|---|\n| Scaling | Learn | https://example.com/invented/ | Reason |')
         errors=ns['validate_brief'](text,'blog',[{'url':'https://www.pingcap.com/real/'}],{'minimum':1800,'maximum':2500})
         self.assertIn('Unverified or duplicate internal link',errors)
@@ -132,7 +137,7 @@ class OutputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             ns['os'] = Mock(getenv=lambda key: None, getcwd=lambda: folder, path=os.path)
             with self.assertRaisesRegex(ValueError,'incomplete'):
-                ns['generate_brief']('scaling','blog',[],[],[],[])
+                ns['generate_brief']('scaling','blog',SEED,[],[],[])
             drafts = list(Path(folder).glob('brief_failed_*/draft.md'))
             self.assertEqual(len(drafts), 1)
             self.assertIn('Partial output', drafts[0].read_text())
@@ -144,7 +149,7 @@ class OutputTests(unittest.TestCase):
         client=Mock();client.messages.create.return_value=types.SimpleNamespace(
             stop_reason='end_turn',content=[types.SimpleNamespace(type='text',text=content)])
         ns['anthropic']=Mock();ns['anthropic'].Anthropic.return_value=client
-        self.assertEqual(ns['generate_brief']('scaling','blog',[],[],[],[]),content)
+        self.assertEqual(ns['generate_brief']('scaling','blog',SEED,[],[],[]),content)
         prompt=client.messages.create.call_args.kwargs['messages'][0]['content']
         self.assertIn('Word Count Plan',prompt);self.assertIn('SERP Features',prompt)
         client.messages.create.return_value=types.SimpleNamespace(content=[types.SimpleNamespace(text=' A title ')])
@@ -174,11 +179,12 @@ class OutputTests(unittest.TestCase):
 
     def test_comparison_allocations_fit_every_tier(self):
         ns = namespace()
-        for volume in [None, 20, 500, 2000, 5000]:
+        for volume in [0, 20, 500, 2000, 5000]:
             plan = ns['word_count_plan']([], {'intent':{'search_volume':volume}}, 'comparison')
             self.assertEqual(sum(plan['section_budgets'].values()), plan['article_target'])
             self.assertLessEqual(plan['article_target'], plan['maximum'])
             self.assertEqual(list(plan['section_budgets'])[2], 'At a glance')
+            self.assertEqual(list(plan['section_budgets'])[-1], 'Decision endcap')
 
     def test_single_and_range_budget_formats(self):
         ns = namespace()
@@ -206,7 +212,7 @@ class OutputTests(unittest.TestCase):
     def test_unmatched_link_reports_exact_heading(self):
         ns = namespace()
         url = 'https://www.pingcap.com/example/'
-        text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+        text = valid_brief(ns).replace('No verified internal link candidates returned; refresh the sitemap inventory',
             '| Wrong heading | Learn | ' + url + ' | Reason |')
         errors = ns['validate_brief'](text, 'blog', [{'url':url}], {'minimum':1800,'maximum':2500})
         self.assertTrue(any("'Wrong heading'" in e and 'valid h2_N ID' in e for e in errors))
@@ -214,7 +220,7 @@ class OutputTests(unittest.TestCase):
     def test_link_ids_render_final_headings_and_preserve_other_cells(self):
         ns = namespace()
         url = 'https://www.pingcap.com/example/'
-        text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+        text = valid_brief(ns).replace('No verified internal link candidates returned; refresh the sitemap inventory',
             '| Section (H2) | Anchor text | Target URL | Why |\n| h2_1 | Learn h2_1 | ' + url + ' | Reason h2_1 |')
         text = text.replace('## Scaling', '## A newly worded heading')
         resolved = ns['resolve_internal_link_ids'](text)
@@ -234,14 +240,14 @@ class OutputTests(unittest.TestCase):
                   load_brief_examples=lambda:'', load_feedback=lambda:'',
                   build_system_prompt=lambda *args:'prompt')
         url = 'https://www.pingcap.com/example/'
-        text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+        text = valid_brief(ns).replace('No verified internal link candidates returned; refresh the sitemap inventory',
                                        '| h2_1 | Learn | '+url+' | Reason |')
         client = Mock()
         client.messages.create.return_value = types.SimpleNamespace(stop_reason='end_turn',
             content=[types.SimpleNamespace(type='text', text=text)])
         ns['anthropic'] = Mock()
         ns['anthropic'].Anthropic.return_value = client
-        result = ns['generate_brief']('scaling','blog',[],[],[],[], internal_link_candidates=[{'url':url}])
+        result = ns['generate_brief']('scaling','blog',SEED,[],[],[], internal_link_candidates=[{'url':url}])
         self.assertIn('| Scaling | Learn |', result)
         self.assertNotIn('| h2_1 |', result)
         self.assertEqual(client.messages.create.call_count, 1)
@@ -249,7 +255,7 @@ class OutputTests(unittest.TestCase):
     def test_link_id_placement_cap_and_duplicate_urls(self):
         ns = namespace()
         urls = ['https://www.pingcap.com/'+str(i)+'/' for i in range(3)]
-        text = valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+        text = valid_brief(ns).replace('No verified internal link candidates returned; refresh the sitemap inventory',
             '\n'.join('| h2_1 | Learn | '+url+' | Reason |' for url in urls))
         errors = ns['validate_brief'](text, 'blog', [{'url':url} for url in urls], {'minimum':1800,'maximum':2500})
         self.assertTrue(any('more than two links' in e for e in errors))
@@ -259,14 +265,14 @@ class OutputTests(unittest.TestCase):
     def test_formatted_ids(self):
         ns=namespace(); url='https://www.pingcap.com/example/'
         for key in ['**h2_1**', '`h2_1`', '__h2_1__']:
-            text=valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+            text=valid_brief(ns).replace('No verified internal link candidates returned; refresh the sitemap inventory',
                 '| '+key+' | Learn | '+url+' | Reason |')
             self.assertEqual(ns['validate_brief'](text,'blog',[{'url':url}],{'minimum':1800,'maximum':2500}),[])
             self.assertIn('| Scaling |',ns['resolve_internal_link_ids'](text))
 
     def test_empty_link_table_rejected(self):
         ns=namespace()
-        text=valid_brief(ns).replace('No verified internal link candidates returned — refresh the sitemap inventory',
+        text=valid_brief(ns).replace('No verified internal link candidates returned; refresh the sitemap inventory',
             '| Section (H2) | Anchor text | Target URL | Why |\n|---|---|---|---|')
         self.assertIn('Internal Links table contains no verified link recommendations',
             ns['validate_brief'](text,'blog',[{'url':'https://www.pingcap.com/x/'}],{'minimum':1800,'maximum':2500}))
@@ -318,11 +324,14 @@ class OutputTests(unittest.TestCase):
             self.assertTrue(ns['validate_serp_blocks'](invalid))
 
     def test_prompt_conflicts_removed(self):
-        ns=namespace();prompt=ns['_BASE_INSTRUCTIONS']+ns['_QUALITY_CHECKLIST']
+        import brief_quality
+        base, checklist = brief_quality.system_prompt_parts('listicle', {'url':'https://www.pingcap.com/ai/','anchor':'AI'})
+        prompt = base + checklist
         self.assertNotIn('2,000–5,000',prompt)
         self.assertNotIn('diagram suggestion for each H3',prompt)
         self.assertNotIn('/article/[slug]/ for other types',prompt)
         self.assertIn('12 for listicles',prompt)
+        self.assertNotIn('3–5 sentences', prompt)
 
 if __name__=='__main__':unittest.main()
 

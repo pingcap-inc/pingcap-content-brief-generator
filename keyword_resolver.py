@@ -235,18 +235,18 @@ class ResearchAPI:
                 self.cache.put(['metrics',kw,self.config['location_code'],self.config['language_code']],values[kw])
         return values
 
-    def serp(self, keyword):
+    def serp(self, keyword, depth=10):
         def fetch():
             result = self.post('serp/google/organic/live/advanced', {
                 'keyword':keyword,'location_code':self.config['location_code'],
-                'language_code':self.config['language_code'],'depth':10,
+                'language_code':self.config['language_code'],'depth':depth,
                 'device':'desktop','os':'windows','load_async_ai_overview':True})
             if not result or not isinstance(result[0].get('items'),list):
                 raise ProviderError('DataForSEO SERP response is unavailable for '+keyword)
             items = result[0]['items']
             organic = [{'rank':i.get('rank_group'), 'url':i.get('url',''),
                         'title':i.get('title',''),'description':i.get('description','')}
-                       for i in items if i.get('type')=='organic'][:10]
+                       for i in items if i.get('type')=='organic'][:depth]
             ai = [i for i in items if i.get('type')=='ai_overview']
             def cited(node):
                 if isinstance(node,dict):
@@ -257,7 +257,8 @@ class ResearchAPI:
             return {'organic':organic,'paa_questions':paa,'featured_snippet':featured,'ai_overview':ai,'ai_overview_present':bool(ai),
                     'pingcap_cited':cited(ai),'cannibalization_source':'SERP fallback (GSC is not integrated)',
                     'retrieved_at':datetime.now(timezone.utc).isoformat()}
-        return self.cached('serp',keyword,fetch)
+        # Stage 0 scores on the top 10; the brief extends the confirmed keyword to a deeper SERP.
+        return self.cached('serp' if depth==10 else f'serp{depth}',keyword,fetch)
 
     def relevance(self, title, keyword, results):
         data = self.judge('Judge each organic result against title_angle, not just keyword overlap. Return {"pages":[{"index":0,"relevance":0.0,"page_type":"comparison","different_brand":false}]}. Exactly one entry for each zero-based result index. relevance is 0..1. page_type must be comparison, listicle, docs, vendor homepage, forum, explainer, guide, product, or other. different_brand=true only when this is an unrelated brand/entity (e.g. TripAdvisor for tiadvisor). Base judgments only on supplied titles/URLs/snippets.', {'title_angle':title,'keyword':keyword,'results':results})
@@ -478,7 +479,7 @@ def brief_header(resolution):
     lines += ['', 'Runner-up candidates and scores:']
     for row in resolution['supporting_candidates']:
         score_value = row.get('scores')
-        lines.append((f"- {plain(row['keyword'])}: {score_value['total']:.3f}" if score_value else f"- {plain(row['keyword'])}: not SERP-scored") + ' — ' + plain(row['status']))
+        lines.append((f"- {plain(row['keyword'])}: {score_value['total']:.3f}" if score_value else f"- {plain(row['keyword'])}: not SERP-scored") + ' (' + plain(row['status']) + ')')
     lines += ['', 'Acknowledged warnings:']+[('- '+plain(w['message'])) for w in resolution['warnings']]
     if not resolution['warnings']:
         lines.append('- None')

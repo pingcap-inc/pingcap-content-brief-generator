@@ -1,0 +1,193 @@
+# Solution pages. Guidance moved from the former inline prompt.
+# word_weights: null means the model distributes the tier budget itself.
+content_types:
+- solution
+max_h2: 10
+faq_section: faqs
+primary_cta_section: closing_cta
+mechanism_section: solution_positioning
+word_weights: null
+sections:
+- id: pain
+  position: 1
+  label: Pain / problem framing
+  match:
+  - (?i)why .* breaks down
+  - (?i)\bpain
+  - (?i)problem
+- id: solution_positioning
+  label: TiDB solution positioning
+  match:
+  - (?i)^tidb\b
+  - (?i)how tidb
+- id: faqs
+  position: -2
+  label: FAQs
+  match:
+  - (?i)\bfaqs?\b
+  - (?i)frequently asked
+- id: closing_cta
+  position: -1
+  label: Closing CTA
+  match:
+  - .
+guidance: |
+  For solution content type, the outline must follow this exact structure.
+  Solution pages are conversion-focused product pages targeting a specific
+  industry, persona, or use case. They are NOT educational blog posts: every
+  section must move the reader toward a demo, trial, or consultation.
+
+  **Solution page audience:** Always specify 2–3 named roles (e.g. "CTOs,
+  platform engineers, and data leads at fintech companies"). The page goal
+  must state what the reader should believe, what action they should take,
+  and how this page strengthens TiDB's entity association for the target vertical.
+
+  **Solution page narrative arc:**
+  Hero → Pain → Solution → Use Cases → Architecture → Social Proof →
+  Adoption Journey → Resources → Closing CTA
+
+  **H1: Value proposition headline**
+  Format: "[TiDB capability] for [industry/use case]" or "[Outcome] with TiDB"
+  Must incorporate the target keyword. Include above-the-fold guidance:
+  - Intro video block (60–90s explainer animation or demo)
+  - Single-sentence positioning statement under the headline
+  - 3–4 key value prop bullets (capability + outcome format, not feature lists)
+  - Hero buttons, written as **Secondary CTA:** lines with verified URLs only
+    (the single primary CTA belongs in the closing H2)
+  Target: ~120–180 words above the fold.
+
+  **H2 1: Pain / problem framing**
+  Title pattern: "Why [legacy approach] breaks down for [use case]"
+  Target: ~220–300 words.
+  Content: 3 H3s, each naming a specific pain point with business impact.
+  Structure each H3 as: pain name → what causes it → what it costs the business.
+  Pain must be specific to the target vertical, with no generic "legacy databases
+  are slow" statements. Reference actual failure modes (e.g. "batch ETL kills
+  real-time visibility", "manual sharding fragments logistics data").
+  Rationale: 2 sentences: search intent captured, then urgency established.
+
+  **H2 2: TiDB solution positioning**
+  Title pattern: "TiDB: [specific capability] for [use case]"
+  Target: ~260–340 words.
+  Content: 3–4 H3s, each mapping a TiDB architectural capability to the
+  vertical pain. Name specific technical entities: TiKV, TiFlash, Raft
+  consensus, HTAP, PD placement driver, MVCC. Each H3 ends with a concrete
+  outcome the buyer can expect (metric, capability, or architectural benefit).
+  Do NOT list generic features; connect every capability to the vertical.
+  Rationale: 2 sentences.
+
+  **H2 3: Use cases**
+  Title pattern: "Solution use cases: [specific scenarios for this vertical]"
+  Target: ~300–400 words.
+  Content: 3–4 H3s, each a named use case with:
+  - One-sentence description of the scenario
+  - What TiDB enables in this scenario (specific capability)
+  - A per-use-case CTA (e.g. "See a [use case] demo")
+  Use cases must be specific to the vertical, not generic ("real-time inventory
+  management", not "real-time analytics"). Each use case should connect to a
+  buying scenario and ideally map to a longer-form playbook that could be built.
+  Rationale: 2 sentences.
+
+  **H2 4: Architecture (technical evaluator section)**
+  Title pattern: "Architecture: [how TiDB enables the vertical capability]"
+  Target: ~240–320 words.
+  Content: 3 H3s covering the data flow:
+  - H3 1: Ingest: how data enters TiDB (streaming, batch, CDC, Kafka)
+  - H3 2: Unified store: how TiDB eliminates the need for a separate warehouse
+  - H3 3: Query and serve: how analytics and operational queries run together
+  Use at most one shared architecture diagram for these three H3s. Include sample SQL queries or code
+  snippets relevant to the vertical. This section is for architects and
+  engineers, so be technically specific.
+  Rationale: 2 sentences.
+
+  **H2 5: Social proof / customer evidence** (conditional on relevant verified evidence)
+  Title pattern: "Proven [vertical] results: customers and social proof"
+  Target: ~220–300 words.
+  Content: Include only the H3s supported by supplied evidence; omit the entire
+  section if no relevant verified customer material is available. Never invent metrics.
+  A roster URL alone is not evidence for a customer metric or use-case fit.
+  - H3 1: Named customer story with metrics (throughput, latency, cost reduction,
+    downtime eliminated). Link to full case study. Do NOT invent metrics;
+    use verified pingcap.com case study data only.
+  - H3 2: Second customer vignette (before/after architecture, 2–3 sentences)
+  - H3 3: Logos, pull quotes, and third-party recognition (G2, Gartner Peer
+    Insights, awards). Verify all ratings before publication.
+  Rationale: 2 sentences.
+
+  **H2 6: Interactive tools** (include when vertically relevant)
+  Title pattern: "Interactive tools: explore [scale/cost/latency] for your [vertical]"
+  Target: ~180–240 words.
+  Content: 2–3 H3s covering interactive elements:
+  - Capacity / latency estimator (slider for events/second, regions, data volume)
+  - Cost comparison widget (current stack vs TiDB)
+  - Sample query explorer (pre-built SQL for the vertical use case)
+  Include specific slider parameters and output metrics relevant to the vertical.
+  Note: this section requires engineering implementation; flag it as an
+  interactive element requiring lazy loading for Core Web Vitals.
+  Rationale: 2 sentences. Omit this section if the vertical has no clear
+  interactive tool angle.
+
+  **H2 7: Adoption journey**
+  Title pattern: "Adoption journey: from pilot to full [vertical] deployment"
+  Target: ~220–300 words.
+  Content: 4 H3 steps:
+  - Step 1: Discovery and architecture design (workshop with PingCAP SAs,
+    output: target schemas, migration plan, success metrics)
+  - Step 2: Pilot (one region, business unit, or use case; validate in production)
+  - Step 3: Scale-out and rollout (phased migration, timeline visualization)
+  - Step 4: Optimize and expand (advanced capabilities, co-build roadmap)
+  Include a visual suggestion: timeline with swimlanes for app, data, and infra
+  teams. This section reduces perceived migration risk.
+  Rationale: 2 sentences.
+
+  **H2 8: Resources and thought leadership**
+  Title pattern: "Resources on [vertical capability] with TiDB"
+  Target: ~140–180 words.
+  Content: 3 H3s:
+  - Vertical-specific case studies (link to verified pingcap.com case study URLs)
+  - Technical deep dives (HTAP, zero-ETL, real-time architecture blogs/webinars)
+  - Best practices and checklists (architecture diagrams, design guides)
+  All links must be verified pingcap.com URLs; do not invent paths.
+  Rationale: 2 sentences.
+
+  **H2 9: FAQs** (placed before the closing CTA)
+  Follow the FAQ rules above.
+
+  **H2 10: Closing CTA**
+  Title pattern: "Get started with TiDB for [vertical/use case]"
+  Target: ~120–160 words.
+  Content: 3 role-based H3 CTAs:
+  - H3 1: Self-serve / free trial CTA (for engineers and builders)
+  - H3 2: Consultation / architecture workshop CTA (for architects and leads)
+  - H3 3: Docs, SDKs, and reference implementations (for developers evaluating)
+  Each H3 names the role it targets. The single primary CTA (the supplied
+  priority link) sits in this H2; the role-based H3s use secondary CTAs.
+  Rationale: 2 sentences.
+
+  **Solution page URL structure:** Always /solutions/[slug]/
+  Examples: /solutions/fintech/ /solutions/real-time-logistics-data-platform/
+           /solutions/modernize-mysql-workloads/
+
+  **Current page refresh guidance** (for existing pages being updated):
+  When the brief is for a content refresh, include a "Current Heading" field
+  for each H2/H3 alongside the "Recommended" heading, with a one-sentence
+  change rationale explaining what is wrong with the current heading and why
+  the new version is better. Follow the format used in the SaaS and SQL
+  Workload modernization briefs: "Current H2: [existing text]" followed by
+  "Recommended H2: [new text]" and "Change rationale: [one sentence]".
+
+  **Solution page schema markup:** Always include FAQPage (if FAQ section
+  present), VideoObject (for the hero video), HowTo (for the adoption journey
+  steps), and SoftwareApplication (for TiDB mentions).
+
+  Note: The 10 H2 maximum rule applies to solution pages. Solution pages have
+  up to 10 template H2 sections including FAQs. Social proof and interactive tools are conditional;
+  renumber remaining sections when either is omitted. Adoption journey position is
+  not fixed after omissions. Do not add placeholder sections to maintain numbering.
+
+  ---
+checklist: |
+  23. Solution briefs follow Pain, Solution, Use Cases, Architecture, Social Proof,
+      Adoption Journey, Resources, FAQs, Closing CTA, use /solutions/[slug], and include
+      a hero with video block, value prop bullets, and secondary CTAs.
+  24. Solution schema includes VideoObject, HowTo, FAQPage, and SoftwareApplication.

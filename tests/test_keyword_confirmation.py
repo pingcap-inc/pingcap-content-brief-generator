@@ -159,6 +159,9 @@ class ConfirmationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
 
 
+OUT = io.StringIO()
+
+
 class PipelineTests(unittest.TestCase):
     def test_confirmed_keyword_drives_calls_title_remains_angle_and_audit_is_saved(self):
         source = Path(__file__).resolve().parents[1] / 'brief.py'
@@ -174,7 +177,8 @@ class PipelineTests(unittest.TestCase):
                   url_domain=lambda url:urlparse(url).hostname)
         for name, value in {'get_keyword_data':[], 'extract_headings_from_url':[], 'get_llm_mentions':{},
                             'get_backlinks_data':[], 'load_internal_link_inventory':([], 'fixture'),
-                            'select_internal_link_candidates':[], 'validate_internal_link_candidates':[],
+                            'select_internal_link_candidates':[],
+                            'validate_internal_link_candidates':[{'url':'https://www.pingcap.com/ai/','slot':1}],
                             'get_semrush_keyword_intent':{}, 'get_semrush_related_keywords':[],
                             'get_semrush_keyword_gap':[], 'get_semrush_domain_authority':[],
                             'generate_brief':'Draft', 'summarize_title':'Title', 'create_google_doc':'https://example.com/doc',
@@ -184,8 +188,14 @@ class PipelineTests(unittest.TestCase):
         exec(compile(ast.Module(body=[main],type_ignores=[]),str(source),'exec'), ns)
         def confirm(*args):
             events.append(('confirmed',resolution['primary_keyword'])); return resolution
-        with tempfile.TemporaryDirectory() as d, patch('keyword_resolver.ResearchAPI'), patch('keyword_resolver.Resolver') as resolver, patch('keyword_confirmation.confirmation_screen',side_effect=confirm), patch.object(sys,'argv',['brief.py',TITLE,'comparison']), contextlib.redirect_stdout(io.StringIO()):
+        with tempfile.TemporaryDirectory() as d, patch('keyword_resolver.ResearchAPI') as research, patch('keyword_resolver.Resolver') as resolver, patch('keyword_confirmation.confirmation_screen',side_effect=confirm), patch.object(sys,'argv',['brief.py',TITLE,'comparison','--priority-link-url','https://www.pingcap.com/ai/',
+                                                                  '--priority-link-anchor','distributed SQL database for AI applications']), contextlib.redirect_stdout(OUT):
             resolver.return_value.resolve.return_value=proposal
+            organic=[{'rank':i,'url':f'https://example{i}.com/page','title':f'Result {i}','description':''} for i in range(1,21)]
+            research.return_value.serp.return_value={'organic':organic,'ai_overview':[],'paa_questions':['Q?','q?'],'featured_snippet':[]}
+            research.return_value.relevance.return_value=[{'index':i,'relevance':0.9 if i%2==0 else 0.1,'page_type':'comparison',
+                                                           'different_brand':False} for i in range(20)]
+            research.return_value.extract.return_value={'competitor':'Supabase'}
             old=os.getcwd()
             try:
                 os.chdir(d); ns['main']()
@@ -199,6 +209,15 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(ns['generate_brief'].call_args.kwargs['keyword_resolution'],resolution)
         self.assertEqual(report['keyword_resolution'],resolution)
         self.assertEqual(report['status'],'validated')
+        kwargs = ns['generate_brief'].call_args.kwargs
+        self.assertEqual(kwargs['priority_link'], {'url':'https://www.pingcap.com/ai/',
+                                                   'anchor':'distributed SQL database for AI applications'})
+        self.assertEqual(kwargs['internal_link_candidates'][0]['selection_rule'], 'priority link (required)')
+        self.assertEqual(kwargs['quality_context']['serp_source_keyword'], 'supabase alternative')
+        self.assertEqual(research.return_value.serp.call_args.args, ('supabase alternative', 20))
+        serp = ns['generate_brief'].call_args.args[3]
+        self.assertEqual([r['rank'] for r in serp], list(range(1, 21, 2)), 'only relevant pages, ranks kept')
+        self.assertEqual(ns['generate_brief'].call_args.args[4], ['Q?'], 'PAA deduplicated')
 
 
 if __name__ == '__main__':

@@ -745,841 +745,27 @@ def load_feedback():
         return ""
 
 
-_BASE_INSTRUCTIONS = """
-You are an expert SEO content strategist for PingCAP (pingcap.com), the company
-behind TiDB — an open-source, distributed SQL database that supports hybrid
-transactional and analytical processing (HTAP) workloads at massive scale.
 
-Your task: produce a fully populated PingCAP content brief in Markdown.
-The reference examples provided are the gold standard — match them exactly
-in depth, tone, heading rationale quality, and entity specificity. The explicit
-output format and current rules below take precedence over outdated example formats.
 
----
+def build_system_prompt(examples_text, feedback_text, content_type, priority_link, competitor=None):
+    """Assemble the system prompt from config/prompts, the page-type template, examples and feedback."""
+    from brief_quality import system_prompt_parts
 
-## Required Output Format
-
-Produce the brief in this exact order. Every section must be fully written —
-no placeholders, no "TBD", no skeleton text. Explicit missing-evidence notices
-and omission of conditional sections are required when data is unavailable.
-Use the exact section names below as Markdown headings. End Outline / Headings
-before Schema Markup Recommendations; visual notes belong inside each outline H2.
-
----
-
-### Meta Elements
-
-Present as a single 2-column markdown table with exactly these rows.
-Do NOT output Entity Recognition Focus or Relevant LLM Queries as separate
-sections — they are rows inside this table.
-
-| Meta Elements | |
-|---|---|
-| Target Keyword | [the single primary keyword] |
-| Supporting Keywords | kw1<br>kw2<br>kw3<br>... (10–15 specific supporting keywords, one per line using <br>) |
-| Total MSV | [sum of all keyword search volumes] |
-| Entity Recognition Focus | entity1<br>entity2<br>... (10–15 exact named technical entities — specific product names, algorithm names, protocol names, architecture patterns, database-specific concepts — that must co-occur on this page for LLM knowledge graph association. Must be specific and technical, e.g. "Raft consensus", "TiKV", "TiFlash", "MVCC", "PD placement driver", "two-phase commit". Generic terms like "scalability" or "performance" are not acceptable. Use <br> between entities.) |
-| Relevant LLM Queries | query1<br>query2<br>... (4–5 specific, realistic prompts a user might type into ChatGPT, Claude, or Gemini that this page should appear in or authoritatively answer. Use <br> between queries.) |
-| Meta Title | [<=60 characters, must include the target keyword. Do NOT include a year — titles with years date quickly and require constant maintenance.] |
-| Meta Description | [<=155 characters] |
-| URL Structure | [For comparison content: /compare/[slug]/ e.g. /compare/tidb-vs-postgresql/ — For blog: /blog/[slug]/ — For solution: /solutions/[slug]/ — For other types: /article/[slug]/] |
-
-Use <br> for line breaks within multi-value cells (Supporting Keywords,
-Entity Recognition Focus, Relevant LLM Queries). Do NOT use separate sections
-for Entity Recognition Focus or Relevant LLM Queries anywhere in the brief.
-
----
-
-### Page Goal
-
-Write 3–5 sentences describing what the reader should believe after
-reading, what action they should take, and how this content strengthens
-TiDB/PingCAP's entity association in LLMs and search engines for the target
-keyword cluster. Put role, company type, evaluation stage, and decision driver
-only in the separate Target Audience section.
-
----
-
-### Target Audience
-
-  Write a focused 3–5 sentence paragraph that names:
-  - The specific job titles or roles (e.g. "Senior engineers, platform architects, and database leads")
-  - The company type and scale (e.g. "at high-growth SaaS companies, fintech platforms, or AI-native startups")
-  - The evaluation stage they are at (e.g. "who are actively evaluating distributed SQL solutions after hitting MySQL scaling limits")
-  - What drives their decision (the primary technical or business concern they are trying to resolve)
-
-  Where relevant, reference PingCAP persona research: TiDB adoption is typically initiated
-  by highly technical stakeholders — senior engineers and engineering leaders — who care
-  most about scalability, high availability, MySQL compatibility, and lower system
-  complexity. Tailor the description to the specific topic and content type rather than
-  copying this verbatim.
-
-  Do NOT merge this section with Page Goal. They are separate outputs.
-
----
-
-### Technical Notes
-
-Bullet list of SEO and Core Web Vitals requirements specific to this content type:
-- Only one H1 (page title)
-- Sequential H2 -> H3 hierarchy — no skips
-- Natural inclusion of semantically related keywords
-- Exact schema markup types to implement (e.g. FAQPage, ItemList,
-  HowTo, BreadcrumbList, SoftwareApplication, TechArticle, VideoObject) —
-  match to actual sections on the page
-- Interactive elements (tabs, comparison widgets) with lazy loading
-- Alt text for all visuals that are not CSS background images
-- Any content-type-specific requirements (e.g. sticky TOC for playbooks,
-  comparison table for listicles)
-
----
-
-### Writer Guardrails
-
-These are mandatory editorial standards the writer must follow before publication:
-- **Benchmark data**: Must include year, test conditions, and verifiable source. Drop any benchmark that cannot be attributed — do not use unverifiable speed claims.
-- **Pricing claims**: Use publicly available numbers with source URLs. If exact pricing cannot be cleanly compared, compare models only (e.g. open-source vs. managed vs. enterprise).
-- **Review ratings**: If citing G2, Capterra, or Trustpilot scores, include the source URL and verify the rating is current before publication.
-- **Internal links**: Use only verified pingcap.com URLs. Do not guess or invent paths.
-- **Competitor claims**: Any limitation attributed to a competitor must be factual and attributable — no editorialising.
-- **Product positioning**: Avoid generic product praise. Ground all TiDB positioning in specific capabilities, architecture facts, or customer proof points.
-
----
-
-### Internal Links
-
-Present up to five recommendations as a Markdown table in this exact format:
-
-| Section (H2) | Anchor text | Target URL | Why |
-|--------------|-------------|------------|-----|
-
-Use only URLs from the Verified Internal Link Candidates supplied in the research
-data. Never invent, alter, or guess a URL. If no candidates were supplied, write
-"No verified internal link candidates returned — refresh the sitemap inventory"
-instead of creating links.
-
-In the Section (H2) cell, output only the H2 ID: h2_1 for the first article H2,
-h2_2 for the second, and so on in the FINAL outline order. Count only article H2s,
-not the H1, H3s, brief metadata headings, or headings inside code samples. Finalize
-the outline before assigning IDs. Do not include the heading text or a paraphrase
-in this cell. Python assigns these same IDs and renders the final heading text.
-For example, a link to the sixth article H2 must use h2_6. Use each target URL
-only once, place no more than two links in any H2, and keep anchor text descriptive
-and natural rather than exact-match stuffed. Preserve the deterministic slot purpose
-shown in each candidate's selection_rule field. The Why column must explain in one
-sentence how the target supports that specific H2. Treat this table as a recommendation
-for editorial approval before publication, not as automatic link insertion.
-
----
-
-### LLM Visibility Snapshot
-
-Keep Google SERP AI Overview evidence separate from the LLM mentions report.
-An empty mentions report (even with false mention flags) is unavailable evidence,
-not proof of absence. Identify the actual platform and snapshot; do not infer
-ChatGPT or other platform visibility from Google data. Cite only supplied sources.
-Recommendations are editorial hypotheses, not proof that a format caused a citation
-or a guarantee of AI inclusion, featured snippets, or schema rich-result eligibility.
-
-Using the available evidence, produce:
-
-- **AI Search Presence**: How many AI-generated responses mention this topic area,
-  and which platforms surface results (Google AI Overviews, ChatGPT, etc.)
-- **Cited Sources / Domains**: Which domains are most frequently cited in AI
-  responses for this topic. Note any patterns (docs sites, tutorials, comparisons).
-- **PingCAP / TiDB Visibility**: Whether PingCAP or TiDB currently appears in AI
-  responses. If yes, note the context. If no, note the gap.
-- **Competitor Brand Mentions**: Which competitor brands appear in AI responses.
-  Note their positioning and frequency.
-- **Recommended Content Angle for LLM Citability**: 2–3 sentences on how to
-  structure this content so AI systems are more likely to cite it — e.g.
-  definitive answers, structured data, FAQ format, authoritative comparisons.
-
-If no LLM mentions data was provided: write "No data returned — manual review
-recommended."
-
----
-
-### Link Landscape & Acquisition Angle
-
-Do not infer low competition or a time-to-rank forecast from a small backlink
-sample, missing metrics, or social-platform results. State those limitations.
-
-Using the backlinks data provided, produce:
-
-- **Competitor Backlink Comparison Table**: A table showing each competitor URL
-  analyzed, their referring domains count, total backlinks, domain rank, and
-  dofollow/nofollow ratio.
-- **Anchor Text Patterns**: Summarize the most common anchor text themes across
-  competitors. Note branded vs. generic vs. keyword-rich anchors.
-- **Link Acquisition Strategies**: 2–3 specific, actionable strategies for
-  acquiring backlinks to this content (e.g. data-driven outreach, resource page
-  inclusion, guest posting on complementary sites, creating linkable assets).
-- **Difficulty Flag**: If any competitor has 500+ referring domains, flag this
-  as a high-competition topic and note that link building will require sustained
-  effort.
-
-If no backlinks data was provided: write "No data returned — manual review
-recommended."
-
----
-
-### Outline / Headings
-
-THIS IS THE MOST IMPORTANT SECTION. It must account for at least 50% of the
-total brief word count. Be exhaustive. Every heading in the content must appear
-here with full guidance.
-
-#### Before the heading list, write two blocks: a SERP competitor table and an AI Overview patterns analysis
-
-**Block 1 — Top ranking pages table**
-
-Using the SERP results provided in the research data, produce a table of the top
-ranking pages for the primary keyword. Format exactly as follows:
-
-| # | Page | Key Angle |
-|---|------|-----------|
-| [rank] | [page title / domain] | [1–2 sentence description of what this page covers and what angle it takes — be specific, not generic] |
-
-Preserve each page's original SERP rank; never renumber after exclusions.
-Identify PingCAP pages as existing owned coverage, not external competitors, and
-recommend reviewing them for a refresh before commissioning duplicate coverage.
-Base key angles on supplied snippets/headings; do not imply an unread full-page audit.
-
-Include up to 5 rows — only pages that are genuinely topically relevant to the
-primary keyword. If fewer than 5 relevant pages are in the SERP data, include only
-those that are relevant and note the others as "not topically relevant — excluded".
-If SERP data is empty or unavailable, write:
-"No SERP data returned — manual review recommended before writing. Run DataForSEO
-with the primary keyword to populate this table before briefing a writer."
-
-Do not skip this table even when SERP data is sparse — a partial table with a note
-is more useful to the writer than omitting it entirely.
-
-**Block 2 — Patterns Favored by AI Overviews & LLMs**
-
-This is a writer-facing orientation section (not for publication). Based on the
-SERP data, LLM mentions data, and competitor headings provided, write 4–6 bullets:
-- What the AI Overview leads with for this keyword (first 100 words pattern)
-- Which comparison entities appear repeatedly across the top-ranking pages
-- What content structures earn featured snippets (tables, definition blocks, FAQs)
-- Any content gaps the top-ranking pages miss that TiDB can own
-- Editorial warnings specific to this topic (e.g. "benchmark claims require dated sources")
-
-Ground this in the actual SERP and competitor data provided — do not invent patterns.
-An empty featured_snippet array means no featured-snippet evidence was returned in
-this snapshot, not that no snippet exists or that the position is available to win.
-Describe missing comparisons as potential gaps in the supplied sample, not proof
-that no comparison article exists. Do not claim a confirmed first-mover advantage.
-Observed formats do not establish why Google selected content or guarantee citation.
-Only describe AI Overview wording or snippet ownership when the supplied SERP Features
-contain that evidence. Empty arrays or missing text mean evidence unavailable: say
-"AI Overview data unavailable" or "Featured-snippet data unavailable" as applicable.
-Organic page structures may support editorial recommendations, not claims about
-which structures earned a snippet. A feature not returned is not proof of absence.
-If no SERP data is available, write "Insufficient SERP data — manual review recommended"
-for this block and move on. Do not omit the block entirely.
-
----
-
-#### Heading structure rules
-
-- Use literal Markdown levels: `# Article title`, `## Article section`, and
-  `### Article subsection`. Do not write `## H1: ...` or add H2 labels.
-  Reserve `##` inside the outline for article H2s only. Keep visual notes inline;
-  do not add a Visual Recommendations Summary heading or duplicate summary table.
-- Allocate the H1 introduction plus all H2s within the supplied Word Count Plan.
-  Both the sum of lower bounds and sum of upper bounds must fit that tier.
-  H3 budgets subdivide their parent H2 and must never add to the article total.
-  Use the supplied section allocations when present, as Target: ~N–N words.
-  The selected tier's maximum applies even when below the global 4,500 ceiling.
-
-- Maximum 10 H2 sections, except listicles which allow up to 12.
-  Keep the AEO answer and named mechanism requirements within the existing sections.
-  For listicles, the quick answer is the AEO answer; name the mechanism in the
-  TiDB spotlight H2. For solutions, adapt the solution-positioning H2 to satisfy both.
-- H2 headings should mirror actual search intent phrasing where SERP data supports it
-  (e.g. "Which database performs better as workloads grow?" not "Performance Comparison").
-- For comparison and listicle content types, the SECOND H2 must be an "at a glance"
-  section titled "[Topic] at a glance" with a neutral 6–8 row comparison table
-  covering: architecture, scaling model, high availability, analytics, ecosystem,
-  deployment, and best fit. This is mandatory for comparison and listicle types.
-- Each H2 must represent a distinct stage in the buyer's evaluation journey.
-  Merge any H2 that overlaps in scope with an adjacent H2.
-
-- AEO answer H2 (mandatory for all content types): Every brief must include one H2
-  positioned in the first third of the outline whose heading directly answers the primary
-  keyword's core question or search intent (e.g. if the keyword is "AI agent memory",
-  the H2 might be "What is AI agent memory and why do agents lose it?"). The first 2–3
-  sentences under this H2 must be written as a self-contained, extractable answer —
-  structured so an AI Overview or featured snippet can lift them verbatim. Check the
-  SERP snapshot in the research data: if a competitor already holds the featured snippet
-  for this query, note it in the Inline Content Guidance and instruct the writer to
-  provide more depth and specificity, not just matching coverage.
-  A brief missing this AEO answer H2 is a failure.
-- Named mechanism H2 (mandatory for all content types): Every brief must include one
-  H2 that explicitly closes the loop between the problem raised in the intro and TiDB's
-  specific mechanism that solves it. The heading must name the actual mechanism — not
-  "How TiDB helps" (too vague) but "How TiDB's Multi-Raft architecture eliminates
-  cross-shard transaction overhead" or equivalent. Valid named mechanisms include:
-  Raft consensus, Multi-Raft, TiKV, TiFlash, PD placement driver, HTAP, MVCC,
-  two-phase commit, online DDL, per-agent isolation. The Inline Content Guidance for
-  this section must instruct the writer to name the mechanism in the first sentence and
-  connect it directly to the problem named in the intro — not describe it as a general
-  capability.
-  A brief missing this named mechanism H2 is a failure.
-
----
-
-The outline must have a clear narrative arc from start to finish:
-- The intro establishes the decision stakes and the reader's problem
-- Each H2 builds on the previous one — problem → framework → evaluation → decision
-- The closing section resolves the tension set up in the intro with a concrete next step
-- Transitions between major sections must be implicit in the Inline Content Guidance
-  (e.g. "End this section by signalling that the next section provides the framework
-  for evaluating these differences"). The writer should never feel a section is
-  disconnected from what came before.
-
-For every heading, provide all of the following:
-
-Write the heading as actual markdown — ## for H2, ### for H3, #### for H4.
-Do NOT write "Recommended Heading:" as a label. Just write the heading directly.
-**Current Heading** (for content refreshes only): the existing heading being replaced.
-Omit this field entirely for new content.
-**Target word count**: Include a specific word count range for this section in the
-format "Target: ~X–Y words". Distribute the total word count proportionally.
-For listicles use the supplied deterministic section budgets. They include FAQs
-and the introduction; H3 budgets are subdivisions of H2 budgets, not additional words.
-For other types, distribute the selected total across all sections, including the H1
-introduction. Fixed ranges below are relative weighting guidance only: scale them to
-the selected total. The sum of top-level section targets must fit the selected tier.
-**Rationale**: Exactly 2 sentences — no more. Sentence 1: cover search intent (which query pattern this heading captures and why this phrasing wins over alternatives). Sentence 2: cover one of — LLM entity co-occurrence (which named entities this surfaces and why), buyer evaluation logic (what the evaluator must believe at this stage), or semantic positioning (how this claims a gap competitors miss). Generic rationales (“improves SEO”, “adds keyword”) are not acceptable.
-
-### Verified customer proof points
-
-When the brief requires a customer case study, concrete proof point, or social proof reference, use ONLY customers from this verified list. Never write anonymized placeholders ("a leading global online travel agency", "a multinational financial services firm", etc.) — if nothing from this list fits the topic, omit the case study slot from the outline entirely rather than fabricating or anonymizing.
-
-Verified customers with confirmed pingcap.com case study URLs:
-
-- Flipkart — [https://www.pingcap.com/case-study/flipkart-transforming-database-management-and-reducing-complexity-with-tidb/](https://www.pingcap.com/case-study/flipkart-transforming-database-management-and-reducing-complexity-with-tidb/)
-- MNC Bank — [https://www.pingcap.com/case-study/mnc-bank-supercharges-performance-with-tidb/](https://www.pingcap.com/case-study/mnc-bank-supercharges-performance-with-tidb/)
-- Zhihu — [https://www.pingcap.com/blog/from-plan-to-execution-zhihus-guide-to-petabyte-scale-tidb-database-migration/](https://www.pingcap.com/blog/from-plan-to-execution-zhihus-guide-to-petabyte-scale-tidb-database-migration/)
-- Rakuten — [https://www.pingcap.com/blog/revolutionizing-loyalty-programs-rakuten-distributed-sql/](https://www.pingcap.com/blog/revolutionizing-loyalty-programs-rakuten-distributed-sql/)
-- Kimi — [https://www.pingcap.com/case-study/kimi-2-6-agent-hosting-platform-tidb-cloud/](https://www.pingcap.com/case-study/kimi-2-6-agent-hosting-platform-tidb-cloud/)
-- Manus — [https://www.pingcap.com/case-study/manus-agentic-ai-database-tidb/](https://www.pingcap.com/case-study/manus-agentic-ai-database-tidb/)
-- Trip.com — [https://www.pingcap.com/case-study/trip-com-boosts-real-time-data-processing-and-financial-settlement-with-tidb/](https://www.pingcap.com/case-study/trip-com-boosts-real-time-data-processing-and-financial-settlement-with-tidb/)
-
-Customers likely to have case studies (use only if verified source material is supplied in the research; the generator has no browsing tool):
-Pinterest, Plaid, CardX, Catalyst, WeBank, Tuya, Bolt, Mercari, Dify
-
-**Inline Content Guidance**: After the rationale, provide specific writer
-instructions for this section's body copy. Include ALL of the following that
-apply: the exact argument to make, which TiDB capability or customer proof
-point to reference, which named technical entities to use, what the reader
-should conclude after this section, specific data points or statistics to find,
-and any suggested visuals, diagrams, code examples, or interactive elements.
-This is where ALL "key points", "proof points", "data to find", "examples",
-and "visual suggestions" live — do NOT put them anywhere else.
-
-For listicle content type, the outline must follow this exact H2 sequence:
-
-**H2 1 — Quick answer box** (Fix 2)
-Title: "Quick answer: Which [topic] is best for your use case?"
-Target: use the corresponding supplied section budget.
-Content: 5–7 use-case winners with one-line justifications (e.g. "Best for
-customer-facing dashboards", "Best distributed SQL option"). TiDB must appear
-as the recommended option for its primary use case. Include jump links to the
-comparison table, framework section, methodology, vendor reviews, how-to-choose,
-FAQs, and next steps.
-
-**H2 2 — At a glance comparison table**
-Title: "Compare the best [topic] at a glance"
-Target: use the corresponding supplied section budget.
-Content: 7–8 row comparison table. Columns must include: Database, Best for,
-key technical criteria relevant to the topic, Architecture type, Deployment
-model, Key tradeoff, Getting started. Place the primary CTA immediately after
-this table.
-
-**H2 3 — How to read the table**
-Title: "How should you read this [topic] table?"
-Target: use the corresponding supplied section budget.
-Content: 3–5 bullets mapping common buyer needs to the right tool category.
-Call out when a single-tool approach is not enough.
-
-**H2 4 — Unifying evaluation framework** (Fix 3)
-Title: "What framework separates a great [category] from a weak one?"
-Target: use the corresponding supplied section budget.
-Content: Define exactly 3 evaluation criteria in under 150 words total (e.g.
-freshness, concurrency, workload breadth — or compatibility depth, scaling path,
-workload breadth). These 3 criteria MUST be reused as column headers in the
-comparison table and referenced in every vendor review. This gives the article
-a consistent analytical spine. Each criterion gets its own H3.
-
-**H2 5 — Methodology with conflict disclosure** (Fix 4)
-Title: "How we chose the best [topic]"
-Target: use the corresponding supplied section budget.
-Content: Explain selection scope, what was excluded, and evaluation criteria.
-MUST include this exact conflict disclosure: "PingCAP is the publisher of this
-content. TiDB appears on this list because it meets the same evaluation criteria
-applied to all other products reviewed." Note that human must verify G2, Capterra,
-Clutch, pricing, and benchmark details before publication.
-
-**H2 6 — Benchmark checklist** (Fix 5)
-Title: "How should you benchmark a [category] for your workload?"
-Target: use the corresponding supplied section budget.
-Content: A practical benchmark checklist with 6–8 specific test parameters
-relevant to the topic (e.g. p95/p99 latency, concurrency under load, failover
-behavior, data freshness lag). All performance numbers must include year,
-methodology, and source — remove any stat without a year. Use 3 H3s covering
-workload definition, performance measurement, and operational cost.
-
-**H2 7 — Vendor reviews**
-Title: "Best [topic] reviewed"
-Target: use the corresponding supplied section budget.
-Content: Use the same 7-part vendor template for every entry:
-  - **Best for**: one-sentence positioning statement
-  - **Why it's on the list**: 2–3 sentences on why this product fits the topic
-  - **Key features**: 3–5 bullet points of relevant capabilities
-  - **Pros**: 2–4 bullet points
-  - **Cons / tradeoffs**: 2–3 bullet points (be honest)
-  - **Pricing**: current pricing model (note if self-serve vs. enterprise-only)
-  - **Getting started**: one sentence pointing to docs, trial, or quickstart
-  - **Framework score**: After the 7-part template, add a one-sentence explicit
-    score against each of the 3 evaluation criteria defined in H2 4. Format:
-    "[Criterion 1]: [one-sentence verdict]. [Criterion 2]: [one-sentence verdict].
-    [Criterion 3]: [one-sentence verdict]." This ties every vendor review back
-    to the unifying framework and gives the article analytical consistency.
-For each listed product, include exact G2, Capterra, or Clutch review links
-only if live pages are verified by a human before publication.
-
-**H2 8 — TiDB spotlight** (Fix 6 — when is TiDB the best choice)
-Title: "How TiDB’s [named mechanism] solves [the introductory problem]"
-Target: use the corresponding supplied section budget.
-Content: Map 3 specific use cases to TiDB with concrete fit reasons. Use a customer example or case study only when relevant verified evidence
-is supplied. Otherwise omit that example and explain the technical fit. Each use case gets an H3.
-
-**H2 9 — 4-step decision framework** (Fix 6)
-Title: "How do you choose the right [category]?"
-Target: use the corresponding supplied section budget.
-Content: Four H3 steps: (1) Define use case and workload, (2) Match requirements
-to architecture, (3) Plan for growth and scale, (4) Validate ecosystem and
-operational needs. Help readers decide when a simpler option is enough vs when
-distributed SQL is the right long-term path.
-
-**H2 10 — Architecture patterns** (Fix 7)
-Title: "What architecture patterns work best for [category]?"
-Target: use the corresponding supplied section budget.
-Content: Compare 3 common deployment patterns relevant to the topic. For each:
-name the pattern, describe when it applies, and name the main pitfall to avoid.
-Each pattern gets an H3.
-
-**H2 11 — Closing CTA section** (Fix 8)
-Title: "Ready to evaluate a [category]?" or equivalent
-Target: use the corresponding supplied section budget.
-Content: One primary CTA only, aligned to the priority page. MUST include a
-short editorial policy box covering: how vendors were selected, how often the
-page is updated, how claims are validated, and how conflicts are disclosed.
-
-**H2 12 — FAQs**
-Title: "[Topic] FAQs"
-Target: use the supplied FAQ budget. If PAA is empty, omit this H2 and
-redistribute its budget across the other sections; do not invent questions.
-Content: Answer each PAA question directly. Answer by use case, not with a
-single universal winner. Keep answers factual and unbiased.
-
-TiDB must be featured as a full vendor entry in every listicle, with the same
-7-part structure applied. TiDB should be positioned as the recommended choice
-for teams needing MySQL compatibility + horizontal scale + HTAP.
-TiDB vector search must be noted as beta (public beta) wherever mentioned.
-
-Note: The 10 H2 maximum rule is relaxed for listicle content type to accommodate
-this required structure. Listicles may have up to 12 H2 sections.
-
----
-
-For solution content type, the outline must follow this exact structure.
-Solution pages are conversion-focused product pages targeting a specific
-industry, persona, or use case. They are NOT educational blog posts — every
-section must move the reader toward a demo, trial, or consultation.
-
-**Solution page audience:** Always specify 2–3 named roles (e.g. "CTOs,
-platform engineers, and data leads at fintech companies"). The page goal
-must state what the reader should believe, what action they should take,
-and how this page strengthens TiDB's entity association for the target vertical.
-
-**Solution page narrative arc:**
-Hero → Pain → Solution → Use Cases → Architecture → Social Proof →
-Adoption Journey → Resources → Closing CTA
-
-**H1 — Value proposition headline**
-Format: "[TiDB capability] for [industry/use case]" or "[Outcome] with TiDB"
-Must incorporate the target keyword. Include above-the-fold guidance:
-- Intro video block (60–90s explainer animation or demo)
-- Single-sentence positioning statement under the headline
-- 3–4 key value prop bullets (capability + outcome format, not feature lists)
-- Primary CTA button ("Start Free on TiDB Cloud" or equivalent)
-- Secondary CTA ("Talk to a Solutions Architect")
-Target: ~120–180 words above the fold.
-
-**H2 1 — Pain / problem framing**
-Title pattern: "Why [legacy approach] breaks down for [use case]"
-Target: ~220–300 words.
-Content: 3 H3s, each naming a specific pain point with business impact.
-Structure each H3 as: pain name → what causes it → what it costs the business.
-Pain must be specific to the target vertical — no generic "legacy databases
-are slow" statements. Reference actual failure modes (e.g. "batch ETL kills
-real-time visibility", "manual sharding fragments logistics data").
-Rationale: 2 sentences — search intent captured + urgency established.
-
-**H2 2 — TiDB solution positioning**
-Title pattern: "TiDB: [specific capability] for [use case]"
-Target: ~260–340 words.
-Content: 3–4 H3s, each mapping a TiDB architectural capability to the
-vertical pain. Name specific technical entities: TiKV, TiFlash, Raft
-consensus, HTAP, PD placement driver, MVCC. Each H3 ends with a concrete
-outcome the buyer can expect (metric, capability, or architectural benefit).
-Do NOT list generic features — connect every capability to the vertical.
-Rationale: 2 sentences.
-
-**H2 3 — Use cases**
-Title pattern: "Solution use cases: [specific scenarios for this vertical]"
-Target: ~300–400 words.
-Content: 3–4 H3s, each a named use case with:
-- One-sentence description of the scenario
-- What TiDB enables in this scenario (specific capability)
-- A per-use-case CTA (e.g. "See a [use case] demo")
-Use cases must be specific to the vertical, not generic ("real-time inventory
-management", not "real-time analytics"). Each use case should connect to a
-buying scenario and ideally map to a longer-form playbook that could be built.
-Rationale: 2 sentences.
-
-**H2 4 — Architecture (technical evaluator section)**
-Title pattern: "Architecture: [how TiDB enables the vertical capability]"
-Target: ~240–320 words.
-Content: 3 H3s covering the data flow:
-- H3 1: Ingest — how data enters TiDB (streaming, batch, CDC, Kafka)
-- H3 2: Unified store — how TiDB eliminates the need for a separate warehouse
-- H3 3: Query and serve — how analytics and operational queries run together
-Use at most one shared architecture diagram for these three H3s. Include sample SQL queries or code
-snippets relevant to the vertical. This section is for architects and
-engineers — be technically specific.
-Rationale: 2 sentences.
-
-**H2 5 — Social proof / customer evidence** (conditional on relevant verified evidence)
-Title pattern: "Proven [vertical] results: customers and social proof"
-Target: ~220–300 words.
-Content: Include only the H3s supported by supplied evidence; omit the entire
-section if no relevant verified customer material is available. Never invent metrics.
-A roster URL alone is not evidence for a customer metric or use-case fit.
-- H3 1: Named customer story with metrics (throughput, latency, cost reduction,
-  downtime eliminated). Link to full case study. Do NOT invent metrics —
-  use verified pingcap.com case study data only.
-- H3 2: Second customer vignette (before/after architecture, 2–3 sentences)
-- H3 3: Logos, pull quotes, and third-party recognition (G2, Gartner Peer
-  Insights, awards). Verify all ratings before publication.
-Rationale: 2 sentences.
-
-**H2 6 — Interactive tools** (include when vertically relevant)
-Title pattern: "Interactive tools: explore [scale/cost/latency] for your [vertical]"
-Target: ~180–240 words.
-Content: 2–3 H3s covering interactive elements:
-- Capacity / latency estimator (slider for events/second, regions, data volume)
-- Cost comparison widget (current stack vs TiDB)
-- Sample query explorer (pre-built SQL for the vertical use case)
-Include specific slider parameters and output metrics relevant to the vertical.
-Note: this section requires engineering implementation — flag it as an
-interactive element requiring lazy loading for Core Web Vitals.
-Rationale: 2 sentences. Omit this section if the vertical has no clear
-interactive tool angle.
-
-**H2 7 — Adoption journey**
-Title pattern: "Adoption journey: from pilot to full [vertical] deployment"
-Target: ~220–300 words.
-Content: 4 H3 steps:
-- Step 1: Discovery and architecture design (workshop with PingCAP SAs,
-  output: target schemas, migration plan, success metrics)
-- Step 2: Pilot (one region, business unit, or use case — validate in production)
-- Step 3: Scale-out and rollout (phased migration, timeline visualization)
-- Step 4: Optimize and expand (advanced capabilities, co-build roadmap)
-Include a visual suggestion: timeline with swimlanes for app, data, and infra
-teams. This section reduces perceived migration risk.
-Rationale: 2 sentences.
-
-**H2 8 — Resources and thought leadership**
-Title pattern: "Resources on [vertical capability] with TiDB"
-Target: ~140–180 words.
-Content: 3 H3s:
-- Vertical-specific case studies (link to verified pingcap.com case study URLs)
-- Technical deep dives (HTAP, zero-ETL, real-time architecture blogs/webinars)
-- Best practices and checklists (architecture diagrams, design guides)
-All links must be verified pingcap.com URLs — do not invent paths.
-Rationale: 2 sentences.
-
-**H2 9 — Closing CTA**
-Title pattern: "Get started with TiDB for [vertical/use case]"
-Target: ~120–160 words.
-Content: 3 role-based H3 CTAs:
-- H3 1: Self-serve / free trial CTA (for engineers and builders)
-- H3 2: Consultation / architecture workshop CTA (for architects and leads)
-- H3 3: Docs, SDKs, and reference implementations (for developers evaluating)
-Each H3 names the role it targets. Primary CTA is always "Start Free on
-TiDB Cloud" or equivalent. Never stack two primary CTAs at the same location.
-Rationale: 2 sentences.
-
-**Solution page URL structure:** Always /solutions/[slug]/
-Examples: /solutions/fintech/ /solutions/real-time-logistics-data-platform/
-         /solutions/modernize-mysql-workloads/
-
-**Current page refresh guidance** (for existing pages being updated):
-When the brief is for a content refresh, include a "Current Heading" field
-for each H2/H3 alongside the "Recommended" heading, with a one-sentence
-change rationale explaining what is wrong with the current heading and why
-the new version is better. Follow the format used in the SaaS and SQL
-Workload modernization briefs: "Current H2: [existing text]" followed by
-"Recommended H2: [new text]" and "Change rationale: [one sentence]".
-
-**Solution page schema markup:** Always include FAQPage (if FAQ section
-present), VideoObject (for the hero video), HowTo (for the adoption journey
-steps), and SoftwareApplication (for TiDB mentions).
-
-Note: The 10 H2 maximum rule applies to solution pages. Solution pages have
-up to 9 template H2 sections. Social proof and interactive tools are conditional;
-renumber remaining sections when either is omitted. Adoption journey position is
-not fixed after omissions. Do not add placeholder sections to maintain numbering.
-
----
-
-### Visual recommendations
-
-For every H2 in the outline, assess whether the section describes something visual by nature — architecture, data flow, comparison across options, a process or sequence, a before/after. For every H2, add a one-line visual note immediately after the Inline Content Guidance in this format:
-
-**Visual:** [Table / Architecture diagram / Code snippet / Sequence diagram / None needed] — [one sentence: what it would show and why prose alone is insufficient, OR "prose is sufficient for this section"]
-
-Rules:
-
-- Default to None needed unless prose genuinely cannot convey the concept clearly
-- Default to Table before suggesting a diagram — tables are zero production cost for the writer and solve most comparison and mapping needs
-- For code-heavy sections (SQL, CLI, SDK examples), always specify Code snippet with the language
-- For architecture sections naming TiDB components (TiKV, TiFlash, PD, Raft), specify Architecture diagram only if no equivalent already exists on docs.pingcap.com — if one likely exists, note "check docs.pingcap.com before commissioning"
-- Maximum 2 commissioned diagrams or illustrations per brief. Tables, code snippets,
-  existing assets, and the required solution hero video do not count toward this cap.
-  For solutions, use one shared architecture diagram and one adoption timeline.
-  Consolidate extra diagram ideas into these two rather than exceeding the cap.
-
-### Schema Markup Recommendations
-
-List the exact schema types to implement. For each, write one sentence explaining
-which page section it applies to and why it improves rich-result eligibility or
-LLM citation quality.
-
----
-
-### CTAs
-
-List 2–3 specific CTAs. For each: specify the exact CTA copy, which section it
-appears after, and the audience role it targets (e.g. "For architects evaluating
-distributed SQL: 'Book a TiDB architecture workshop' — placed after the
-Architecture section").
-
----
-
-### Word Count Target
-
-Scale the word count range based on the primary keyword's monthly search volume (MSV)
-from the supplied Word Count Plan. Prefer valid SEMrush volume; otherwise use
-the DataForSEO seed keyword volume. Never use related-keyword volume as the seed. Use this exact table — do not deviate:
-
-| MSV | Target range | Rationale |
-|-----|-------------|-----------|
-| N/A or unknown | 1,800–2,500 words | Unknown volume signals an emerging or niche keyword — depth does not compensate for lack of demand |
-| < 500 | 1,800–2,500 words | Low-volume keyword — focused, tight brief outperforms bloated coverage |
-| 500–1,999 | 2,500–3,200 words | Moderate volume — enough depth to compete, tight enough to stay on topic |
-| 2,000–4,999 | 3,000–3,800 words | High volume — comprehensive coverage needed to compete with established pages |
-| 5,000+ | 3,500–4,500 words | Very high volume — maximum depth justified by competitive SERP |
-
-State the MSV value you are using, which tier it falls into, and the resulting word count
-range. Example: "Primary keyword MSV: 320. Tier: < 500. Target: 1,800–2,500 words."
-Include one sentence of justification based on competitor content depth from the SERP data.
-
-The 4,500 word ceiling is absolute — never exceed it regardless of topic complexity.
-
----
-
-## Absolute Rules — Violations Will Invalidate the Brief
-
-1. The Outline / Headings section must be the longest section by a wide margin —
-   at least 50% of total word count.
-2. Every H2 and H3 must have a multi-sentence Rationale covering at least two
-   of the four angles listed above. No exceptions.
-3. All inline writer guidance — arguments, proof points, data to find, entities
-   to name, visual suggestions — goes INSIDE the relevant outline section only.
-4. Do NOT include any of these as standalone top-level sections:
-   "Key Points to Cover", "Data to Find", "Proof Points", "Examples to Include",
-   "Visuals to Add", "Competitor Analysis", "Search Intent Analysis",
-   "PingCAP/TiDB Angle", or "Keyword Strategy". These concepts belong in
-   the Outline and Page Goal only.
-5. No invented pingcap.com URLs. The Internal Links section may use only URLs
-   supplied in the Verified Internal Link Candidates research block. If that list
-   is empty, say so explicitly and do not create a URL.
-6. No unverified performance claims or superlatives without cited evidence.
-7. FAQ questions in the outline must map directly to the PAA data provided —
-   do not invent questions.
-8. Heading hierarchy must be strictly H1 -> H2 -> H3 -> H4 with no skips.
-9. Maximum 10 H2 sections for comparison/blog/product/playbook/solution types. Listicle
-    type may have up to 12 H2 sections to accommodate the required structure.
-10. Comparison and listicle briefs must include an "at a glance" comparison table
-    as the second H2. A brief missing this is a failure.
-13. Listicle briefs must include: Quick answer box (H2 1), unifying evaluation
-    framework (H2 4), methodology with conflict disclosure (H2 5), benchmark
-    checklist (H2 6), TiDB spotlight (H2 8), 4-step decision framework (H2 9),
-    architecture patterns (H2 10), and editorial policy in the closing section.
-    A listicle brief missing any of these is a failure.
-15. Solution page briefs must follow the Pain → Solution → Use Cases → Architecture
-    → Social Proof → Adoption Journey → Resources → CTA arc. URL must use
-    /solutions/[slug]/. Hero section must include video block, value prop bullets,
-    and dual CTAs. Conditional social proof and interactive tools may be omitted without failure.
-11. The Writer Guardrails section must appear in every brief with all six items.
-12. Word Count Target must state the MSV value, which tier it falls into, the resulting
-    range, and a justification sentence. A vague or un-tiered word count is a failure.
-    The ceiling is always 4,500 words — exceeding it is a failure.
-"""
-
-_QUALITY_CHECKLIST = """
-## Pre-Output Quality Checklist
-
-Before outputting the brief, verify every item below. Rewrite any section that
-fails a check before proceeding. Do not output a brief that fails any check.
-
-1.  The Outline / Headings section is the longest section and accounts for at
-    least 50% of the total brief word count.
-2.  Every H2 and H3 has a Rationale of EXACTLY 2 sentences — not 1, not 3, not 4.
-    Sentence 1 covers search intent. Sentence 2 covers LLM entity co-occurrence,
-    buyer evaluation logic, or semantic positioning. Generic rationales
-    (“improves SEO”, “adds keyword”) are a failure.
-3.  Every H2 and H3 has specific inline content guidance — the writer knows
-    exactly what argument to make, which named entity to use, which proof point
-    to cite, and what the reader should conclude.
-4.  The brief contains NO standalone sections titled "Key Points to Cover",
-    "Proof Points", "Data to Find", "Examples", "Visuals to Add",
-    "Competitor Analysis", "Search Intent Analysis", or "PingCAP/TiDB Angle".
-5.  Internal links are presented as a four-column Markdown table: Section (H2),
-    Anchor text, Target URL, and Why. The table contains no more than five unique
-    target URLs, every URL appears in the supplied candidate list, every link maps
-    to a valid h2_N ID in final article H2 order, no H2 receives more than two links, and every Why
-    cell contains a one-sentence rationale. If no candidates were supplied, the brief
-    says so explicitly instead of inventing URLs.
-6.  Meta title is <=60 characters, includes the target keyword, and contains NO year (e.g. "2024", "2025"). Year references date quickly — remove them.
-7.  Meta description is <=155 characters.
-8.  Entity Recognition Focus lists 10–15 specific named entities (products,
-    algorithms, protocols, architecture patterns) — no generic terms like
-    "scalability" or "performance". Must include technical specifics like
-    "Raft consensus", "TiKV", "MVCC", "PD placement driver".
-9.  Relevant LLM Queries are realistic, specific user prompts — not category
-    labels or generic search queries.
-10. TiDB appears as a full vendor entry in every listicle, using the exact
-    7-part format: Best for -> Why it's on the list -> Key features -> Pros ->
-    Cons/tradeoffs -> Pricing -> Getting started.
-11. TiDB vector search is described as beta (public beta) wherever mentioned.
-12. FAQ questions in the outline map directly to the PAA data provided — no
-    invented questions.
-13. Heading hierarchy is strictly H1 -> H2 -> H3 -> H4 with no skips.
-14. Every listicle vendor section uses the exact 7-part structure.
-15. If LLM mentions data was provided, the brief contains an "LLM Visibility
-    Snapshot" section with AI search presence, cited sources, PingCAP/TiDB
-    visibility, competitor mentions, and a recommended content angle.
-16. If backlinks data was provided, the brief contains a "Link Landscape &
-    Acquisition Angle" section with a competitor backlink comparison table,
-    anchor text patterns, link acquisition strategies, and a difficulty flag
-    if any competitor has 500+ referring domains.
-17. The brief includes a Word Count Target that states: the MSV value used, which
-    tier it falls into (N/A → 1,800–2,500; <500 → 1,800–2,500; 500–1,999 → 2,500–3,200;
-    2,000–4,999 → 3,000–3,800; 5,000+ → 3,500–4,500), the resulting range, and a
-    one-sentence justification. A brief that ignores MSV and defaults to 3,800+ words
-    for a low-volume keyword is a failure.
-18. The outline section opens with two blocks before the heading list:
-    (1) A SERP competitor table listing up to 5 top-ranking pages with their key angles,
-    or a clear note that SERP data was unavailable. A brief that silently omits this table
-    is a failure — an empty table with a note is acceptable, a missing table is not.
-    (2) A "Patterns Favored by AI Overviews & LLMs" block with 4–6 bullets grounded in
-    the SERP and competitor data. If data is unavailable, the block must say so explicitly.
-19. The outline contains a maximum of 10 H2 sections, or 12 for listicles.
-20. For comparison and listicle content types, the second H2 is an "at a glance"
-    comparison table with 6–8 rows. A missing comparison table is a failure.
-21. The brief contains a "Writer Guardrails" section with all six items.
-22. URL Structure uses /compare/[slug]/ for comparison, /blog/[slug]/ for blog,
-    /solutions/[slug]/ for solution, /article/[slug]/ for remaining types.
-23. Every H2 includes a "Target: ~X–Y words" count immediately after the heading.
-    A heading without a word count target is a failure.
-24. Listicle briefs contain a Quick answer box as H2 1 with 5–7 use-case winners
-    and TiDB positioned as the recommended option for its primary use case.
-25. Listicle briefs contain a unifying 3-criteria evaluation framework (H2 4)
-    whose criteria are reused in the comparison table and every vendor review.
-26. Listicle briefs contain a methodology section (H2 5) with the exact conflict
-    disclosure: "PingCAP is the publisher of this content. TiDB appears on this
-    list because it meets the same evaluation criteria applied to all other
-    products reviewed."
-27. Listicle briefs contain a benchmark checklist section (H2 6) with 6–8 specific
-    test parameters. All performance numbers include year, methodology, and source.
-28. Listicle briefs contain a TiDB spotlight section (H2 8) and a 4-step decision
-    framework section (H2 9).
-29. Listicle briefs contain an architecture patterns section (H2 10) with 3 named
-    patterns and pitfalls.
-30. Listicle briefs contain an editorial policy box in the closing section covering
-    vendor selection, update frequency, claim validation, and conflict disclosure.
-31. Every listicle vendor review includes a "Framework score" paragraph that
-    explicitly scores the vendor against all 3 evaluation criteria from H2 4.
-    A vendor review missing this framework connection is a failure.
-32. The outline has a clear narrative arc. The Inline Content Guidance for each
-    H2 includes a transition note to the next section. Sections must not feel
-    disconnected — each one must set up the next.
-33. Solution page briefs include a hero section with video block, positioning
-    sentence, 3–4 value prop bullets, and dual CTAs (primary + secondary).
-34. Solution page briefs include a pain section (H2 1) with 3 H3s naming specific
-    vertical pain points with business impact — no generic statements.
-35. Solution page briefs include an adoption journey section (renumbered if conditional sections are omitted) with exactly
-    4 steps including a visual suggestion for a timeline or swimlane diagram.
-36. Solution page briefs use /solutions/[slug]/ URL structure. Any other URL
-    format for a solution brief is a failure.
-37. Solution page briefs include schema markup for VideoObject (hero video),
-    HowTo (adoption steps), FAQPage (if FAQ present), and SoftwareApplication.
-38. For content refresh briefs (solution type), every recommended heading change
-    includes a "Current:" label and a one-sentence change rationale.
-39. Every case study or customer proof point in the brief uses a verified named customer
-    from the roster above, with a real pingcap.com URL. Anonymized examples ("a leading
-    global X company") are a failure. A missing case study slot is better than a
-    fabricated or anonymized one.
-40. The outline contains an AEO answer H2 in the first third of the heading list whose
-    heading directly answers the primary keyword's core question. The first 2–3 sentences
-    under it are written as a self-contained extractable answer. A brief without this H2
-    is a failure.
-41. The outline contains a named mechanism H2 that closes the loop between the intro's
-    problem and a specific TiDB mechanism by name (Raft, TiFlash, HTAP, TiKV, PD, MVCC,
-    two-phase commit, online DDL, per-agent isolation, or equivalent). The heading names
-    the mechanism explicitly — generic headings like "How TiDB helps" are a failure.
-42. Every H2 in the outline has a Visual line (Table / Architecture diagram / Code snippet /
-    Sequence diagram / None needed). The brief contains no more than 2 commissioned diagrams or illustrations;
-    tables, code snippets, existing assets, and hero video are exempt. Sections that could use a table have a Table suggestion, not a diagram.
-43. The brief contains a standalone Target Audience section between Page Goal and Technical
-    Notes. It names specific job titles, company type, evaluation stage, and primary
-    decision driver. A brief that merges audience into Page Goal or omits this section
-    entirely is a failure.
-"""
-
-
-def build_system_prompt(examples_text, feedback_text):
-    """Assemble the full system prompt from base instructions, examples, checklist, and feedback."""
-    parts = [_BASE_INSTRUCTIONS]
+    base, checklist = system_prompt_parts(content_type, priority_link, competitor)
+    parts = [base]
 
     if examples_text:
         parts.append(
             "## PingCAP Reference Brief Examples\n\n"
             "The following are real PingCAP content briefs. Use them as the gold "
-            "standard for structure, tone, heading rationale quality, internal linking "
-            "style, entity focus, and PingCAP-specific positioning.\n\n"
+            "standard for structure, heading rationale quality, internal linking "
+            "style, entity focus, and PingCAP-specific positioning. Where an example "
+            "conflicts with the rules above (for example em dashes or old section "
+            "formats), the rules win.\n\n"
             + examples_text
         )
 
-    parts.append(_QUALITY_CHECKLIST)
+    parts.append(checklist)
 
     if feedback_text:
         parts.append(
@@ -1626,60 +812,28 @@ def check_pingcap_ranking(keyword):
         return unknown
 
 
-def word_count_plan(keyword_data, semrush_data, content_type):
-    """Choose a single volume source and allocate a feasible article budget."""
-    def volume(value):
-        try:
-            number = int(str(value).replace(",", ""))
-            return number if number >= 0 else None
-        except (ValueError, TypeError):
-            return None
+def word_count_plan(keyword_data, semrush_data, content_type, primary_msv=None):
+    """Choose one volume source, its configured tier, and the template's section budgets."""
+    from brief_quality import section_budgets, volume, word_tier
 
-    msv = volume((semrush_data or {}).get("intent", {}).get("search_volume"))
-    source = "SEMrush"
+    msv, source = volume(primary_msv), "Stage 0 (DataForSEO Google Ads)"
+    if msv is None:
+        msv, source = volume((semrush_data or {}).get("intent", {}).get("search_volume")), "SEMrush"
     if msv is None:
         source = "DataForSEO seed"
         msv = next((v for row in keyword_data or [] if row.get("is_seed")
                     and (v := volume(row.get("search_volume"))) is not None), None)
-    if msv is None:
-        source = "unavailable"
-    if msv is None or msv < 500:
-        low, high = 1800, 2500
-        tier = "unknown" if msv is None else "<500"
-    elif msv < 2000:
-        low, high, tier = 2500, 3200, "500–1,999"
-    elif msv < 5000:
-        low, high, tier = 3000, 3800, "2,000–4,999"
-    else:
-        low, high, tier = 3500, 4500, "5,000+"
+    tier = word_tier(msv)  # Raises when no measured MSV exists: there is no N/A tier.
+    low, high = tier["minimum"], tier["maximum"]
     total = (low + high) // 2
-    plan = {"primary_keyword_msv": msv, "source": source, "tier": tier,
+    plan = {"primary_keyword_msv": msv, "source": source, "tier": tier["label"],
             "minimum": low, "maximum": high, "article_target": total}
-    if content_type == "listicle":
-        labels = ["H1 introduction", "Quick answer", "At a glance", "How to read",
-                  "Evaluation framework", "Methodology", "Benchmark checklist",
-                  "Vendor reviews", "TiDB mechanism spotlight", "Decision framework",
-                  "Architecture patterns", "Closing CTA", "FAQs"]
-        weights = [5, 7, 9, 5, 7, 5, 7, 27, 7, 7, 6, 4, 4]
-        budgets = [total * weight // 100 for weight in weights]
-        budgets[-1] += total - sum(budgets)
-        plan["section_budgets"] = dict(zip(labels, budgets))
+    budgets = section_budgets(content_type, total)
+    if budgets:
+        plan["section_budgets"] = budgets
         plan["budget_rule"] = (
-            "Use Target: ~N–N words for each allocation. H3s subdivide H2 allocations. "
-            "If PAA is empty, omit FAQs and redistribute that allocation."
-        )
-    if content_type == "comparison":
-        labels = ["H1 introduction", "AEO answer", "At a glance", "Architecture / named mechanism",
-                  "Performance", "Compatibility", "High availability", "Decision framework",
-                  "Closing CTA", "FAQs"]
-        weights = [6, 8, 10, 14, 14, 12, 11, 12, 6, 7]
-        budgets = [total * weight // 100 for weight in weights]
-        budgets[-1] += total - sum(budgets)
-        plan["section_budgets"] = dict(zip(labels, budgets))
-        plan["budget_rule"] = (
-            "Use these allocations as Target: ~N–N words. Adapt heading wording to the topic; "
-            "keep At a glance second. H3s subdivide their H2 allocation. If PAA is empty, "
-            "omit FAQs and redistribute its allocation without changing the total."
+            "Use these allocations as Target: ~N–N words, in this order. H3s subdivide "
+            "their H2 allocation and never add to the total."
         )
     return plan
 
@@ -1822,8 +976,12 @@ def validate_serp_blocks(outline):
     return errors
 
 
-def validate_brief(content, content_type, candidates, plan):
-    """Enforce observable structure and link constraints; editorial review is still needed."""
+def validate_brief(content, content_type, candidates, plan, ctx=None):
+    """Enforce observable structure and link constraints; editorial review is still needed.
+
+    With a quality context (built by generate_brief from the Stage 0 resolution), the
+    config-driven quality checks in brief_quality run too and their failures are returned.
+    """
     content = resolve_internal_link_ids(normalize_brief_headings(content))
     errors = []
     sections = brief_sections(content)
@@ -1908,11 +1066,38 @@ def validate_brief(content, content_type, candidates, plan):
         errors.append("More than five internal links")
     if not candidates and "no verified internal link candidates" not in links.lower():
         errors.append("Missing unavailable internal-links notice")
+    if ctx is not None:
+        from brief_quality import failures, run_checks
+        return failures(run_checks(content, ctx, errors))
     return errors
 
 
-def generate_brief(topic, content_type, keyword_data, serp_results, paa_questions, competitor_headings, llm_mentions_data=None, backlinks_data=None, semrush_data=None, internal_link_candidates=None, serp_features=None, keyword_resolution=None):
-    """Load examples + feedback, build the system prompt, and call Claude."""
+def _save_failed_brief(text, research_block, report):
+    """Preserve paid output and research; a unique directory keeps earlier failures."""
+    draft_dir = tempfile.mkdtemp(prefix="brief_failed_", dir=os.getcwd())
+    draft_path = os.path.join(draft_dir, "draft.md")
+    with open(draft_path, "w", encoding="utf-8") as handle:
+        handle.write("<!-- UNVALIDATED DRAFT: not approved for publication. "
+                     "See validation.json. -->\n\n" + text)
+    print(f"           Unvalidated draft saved: {draft_path}")
+    report_path = os.path.join(draft_dir, "validation.json")
+    with open(report_path, "w", encoding="utf-8") as handle:
+        json.dump(report, handle, indent=2, ensure_ascii=False)
+    with open(os.path.join(draft_dir, "research.md"), "w", encoding="utf-8") as handle:
+        handle.write(research_block)
+    print(f"           Validation report saved: {report_path}")
+    return draft_dir
+
+
+def generate_brief(topic, content_type, keyword_data, serp_results, paa_questions, competitor_headings,
+                   llm_mentions_data=None, backlinks_data=None, semrush_data=None,
+                   internal_link_candidates=None, serp_features=None, keyword_resolution=None,
+                   priority_link=None, required_links=None, quality_context=None, report=None):
+    """Build the prompt, call Claude, apply the quality bar with one repair round.
+
+    With keyword_resolution (always supplied by main), serp_results must be the relevant
+    pages only, priority_link is required, and every check is written to validation.json.
+    """
     try:
         brief_max_tokens = int(os.getenv("ANTHROPIC_MAX_TOKENS") or "16000")
     except ValueError as exc:
@@ -1922,12 +1107,47 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
 
     from keyword_resolver import brief_header
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    quality = keyword_resolution is not None
+    if quality and not (priority_link and priority_link.get("url") and priority_link.get("anchor")):
+        raise ValueError("priority_link {url, anchor} is required")
+    plan = word_count_plan(keyword_data, semrush_data, content_type,
+                           keyword_resolution["primary_metrics"]["msv"] if quality else None)
+    header = brief_header(keyword_resolution) if quality else ""
+    report = report if report is not None else {}
+    report.update({"topic": topic, "content_type": content_type, "model": ANTHROPIC_MODEL,
+                   "word_count_plan": plan, "keyword_resolution": keyword_resolution})
 
+    ctx = None
+    if quality:
+        import brief_quality as bq
+        ctx = {"resolution": keyword_resolution, "content_type": content_type,
+               "priority_link": priority_link, "required_links": required_links or [],
+               "keyword_data": keyword_data, "paa": paa_questions,
+               "semrush_related": (semrush_data or {}).get("related_keywords"),
+               "relevant_serp": serp_results, "link_candidates": internal_link_candidates or [],
+               "serp_source_keyword": keyword_resolution["primary_keyword"],
+               "backlinks_empty": bq.rows_all_empty(backlinks_data, ("referring_domains", "total_backlinks", "domain_rank")),
+               "llm_mentions_empty": not llm_mentions_data or not (
+                   llm_mentions_data.get("questions") or llm_mentions_data.get("sources")),
+               "plan": plan, **(quality_context or {})}
+        minimum = bq.rules()["serp"]["min_relevant_pages"]
+        if len(serp_results) < minimum:
+            # Fail before the paid generation call: the SERP cannot support a brief.
+            checks = [bq._check("serp_relevant_pages", [
+                f"Only {len(serp_results)} relevant pages in the top {bq.rules()['serp']['depth']} (minimum {minimum})"])]
+            report.update(status="unvalidated", stop_reason=None, checks=checks, errors=bq.failures(checks))
+            draft_dir = _save_failed_brief(header, "", report)
+            raise ValueError("Brief failed validation: " + "; ".join(report["errors"])
+                             + f". Report preserved in {draft_dir}")
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     examples_text = load_brief_examples()
     feedback_text = load_feedback()
-    system_prompt = build_system_prompt(examples_text, feedback_text)
+    system_prompt = build_system_prompt(examples_text, feedback_text, content_type, priority_link,
+                                        (quality_context or {}).get("competitor"))
 
+    serp_heading = (f"Relevant Organic SERP Results (top {len(serp_results)} relevant pages; "
+                    "irrelevant pages already removed)" if quality else "Top 10 Organic SERP Results")
     research_block = f"""## Topic
 {topic}
 
@@ -1943,7 +1163,7 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
 
 ---
 
-## Top 10 Organic SERP Results
+## {serp_heading}
 ```json
 {json.dumps(serp_results, indent=2)}
 ```
@@ -1963,14 +1183,19 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
 ```
 """
 
-    if keyword_resolution is not None:
+    if quality:
         research_block += "\n## Confirmed Keyword Resolution (authoritative)\n" + json.dumps(keyword_resolution, indent=2)
         research_block += ("\nUse primary_keyword for the target keyword and search-intent analysis. "
                            "Keep title_angle as the article H1/angle. Unselected candidates are "
                            "supporting keyword candidates only; discarded or unvalidated terms "
                            "are not verified recommendations. Do not treat the title as the keyword.\n")
+        research_block += ("\n## Measured Supporting Keywords\nThe generator writes these into Meta "
+                           "Elements; use them naturally in headings and guidance.\n"
+                           + json.dumps(bq.supporting_keywords(keyword_resolution, keyword_data,
+                                                               ctx["semrush_related"]), indent=2))
+        research_block += ("\n## Primary CTA (verbatim)\n" + json.dumps(priority_link)
+                           + "\n## Required Internal Links\n" + json.dumps(required_links or []) + "\n")
 
-    plan = word_count_plan(keyword_data, semrush_data, content_type)
     research_block += "\n## Word Count Plan (mandatory)\n" + json.dumps(plan, indent=2)
     research_block += "\n## SERP Features\n" + json.dumps(serp_features or {
         "status": "unavailable", "ai_overview": [], "featured_snippet": []
@@ -1988,18 +1213,12 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
 {json.dumps(intent_data, indent=2)}
 ```
 
-Use the intent field to shape the tone of the brief:
-- informational → educational, definitional content
-- commercial → comparison, evaluation, use-case content
-- transactional → conversion-focused, CTA-heavy content
-
 ### SEMrush Related & LSI Keywords
-Use these to enrich the Supporting Keywords table. Prioritise by volume.
 ```json
 {json.dumps(semrush_data.get("related_keywords", []), indent=2)}
 ```
 
-### Competitor Keyword Opportunities — PingCAP Ranking Checked
+### Competitor Keyword Opportunities (PingCAP ranking checked)
 Respect each classification: top-10 PingCAP keywords are excluded; improvement
 opportunities should refresh the supplied existing URL. Potential gaps mean no
 ranking returned by this SEMrush report, not proof that content is missing.
@@ -2010,8 +1229,7 @@ check failed; never label it a confirmed gap. All comparisons use the US databas
 ```
 
 ### Competitor Domain Authority
-Use this to calibrate the Word Count Target and Link Landscape difficulty assessment.
-Higher authority competitors require deeper, more comprehensive content to compete.
+Use this to calibrate the Link Landscape difficulty assessment.
 ```json
 {json.dumps(semrush_data.get("domain_authority", []), indent=2)}
 ```
@@ -2027,17 +1245,16 @@ Use only these URLs in the Internal Links table. Do not invent, alter, or guess 
 Finalize the outline first. In each Section (H2) cell use only h2_N, where N is the
 1-based position of the article H2 in the final outline. Do not repeat or paraphrase
 its heading text. Python maps that ID to the heading for the exported table.
-Use each URL once, place no more
-than two links in one H2, and preserve the purpose in the selection_rule field.
-If the list is empty, state that the sitemap inventory returned no verified candidates
-and do not create an internal link.
+Use each URL once, place no more than two links in one H2, and preserve the purpose
+in the selection_rule field. If the list is empty, state that the sitemap inventory
+returned no verified candidates and do not create an internal link.
 
 ```json
 {json.dumps(internal_link_candidates or [], indent=2)}
 ```
 """
 
-    if llm_mentions_data:
+    if llm_mentions_data and not (ctx and ctx["llm_mentions_empty"]):
         research_block += f"""
 ---
 
@@ -2047,7 +1264,7 @@ and do not create an internal link.
 ```
 """
 
-    if backlinks_data:
+    if backlinks_data and not (ctx and ctx["backlinks_empty"]):
         research_block += f"""
 ---
 
@@ -2057,56 +1274,62 @@ and do not create an internal link.
 ```
 """
 
-    message = client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=brief_max_tokens,
-        system=system_prompt,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    "Generate a fully populated content brief based on the research below.\n\n"
-                    + research_block
-                ),
-            }
-        ],
-    )
+    def ask(content):
+        return client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=brief_max_tokens,
+            system=system_prompt,
+            messages=[{"role": "user", "content": content}],
+        )
 
+    def finish(raw):
+        text = resolve_internal_link_ids(normalize_brief_headings(raw))
+        notes = []
+        if quality:
+            text, notes = bq.apply_deterministic(header + text, ctx)
+        return text, notes
+
+    def check(text):
+        structural = validate_brief(text, content_type, internal_link_candidates or [], plan)
+        return bq.run_checks(text, ctx, structural) if quality else structural
+
+    message = ask("Generate a fully populated content brief based on the research below.\n\n"
+                  + research_block)
     text = "\n".join(block.text for block in message.content if block.type == "text")
-    errors = []
-    if message.stop_reason != "end_turn":
-        errors.append(f"Brief generation incomplete: {message.stop_reason}")
+    stop_reason = message.stop_reason
+    checks, notes, errors = [], [], []
+    if stop_reason != "end_turn":
+        errors.append(f"Brief generation incomplete: {stop_reason}")
+        text = header + text
     else:
-        text = resolve_internal_link_ids(normalize_brief_headings(text))
-        errors = validate_brief(text, content_type, internal_link_candidates or [], plan)
+        text, notes = finish(text)
+        checks = check(text)
+        errors = bq.failures(checks) if quality else checks
+        plan_units = bq.repair_plan(checks) if quality and errors else {}
+        if plan_units and bq.rules()["repair"]["max_rounds"] >= 1:
+            # One regeneration of only the offending sections.
+            repair = ask(research_block + "\n\n---\n\n" + bq.repair_prompt(text, plan_units))
+            repaired_raw = "\n".join(b.text for b in repair.content if b.type == "text")
+            report["repair"] = {"units_requested": sorted(plan_units), "violations_before": errors,
+                                "stop_reason": repair.stop_reason}
+            if repair.stop_reason == "end_turn":
+                spliced, applied = bq.apply_repair(text, repaired_raw, plan_units)
+                report["repair"]["units_applied"] = applied
+                text, more = finish(spliced[len(header):] if spliced.startswith(header) else spliced)
+                notes += more
+                checks = check(text)
+                errors = bq.failures(checks)
+
+    report.update(stop_reason=stop_reason, deterministic_notes=notes,
+                  checks=[{k: v for k, v in c.items() if k != "units"} for c in checks] if quality else [],
+                  errors=errors)
     if errors:
-        # Preserve paid generation output and research before rejecting the brief.
-        # A unique directory keeps repeated failures from overwriting earlier drafts.
-        draft_dir = tempfile.mkdtemp(prefix="brief_failed_", dir=os.getcwd())
-        draft_path = os.path.join(draft_dir, "draft.md")
-        with open(draft_path, "w", encoding="utf-8") as handle:
-            handle.write("<!-- UNVALIDATED DRAFT: not approved for publication. "
-                         "See validation.json. -->\n\n" +
-                         (brief_header(keyword_resolution) if keyword_resolution else "") + text)
-        print(f"           Unvalidated draft saved: {draft_path}")
-        report_path = os.path.join(draft_dir, "validation.json")
-        with open(report_path, "w", encoding="utf-8") as handle:
-            json.dump({
-                "status": "unvalidated",
-                "topic": topic,
-                "content_type": content_type,
-                "model": ANTHROPIC_MODEL,
-                "stop_reason": message.stop_reason,
-                "errors": errors,
-                "word_count_plan": plan,
-                "keyword_resolution": keyword_resolution,
-            }, handle, indent=2, ensure_ascii=False)
-        with open(os.path.join(draft_dir, "research.md"), "w", encoding="utf-8") as handle:
-            handle.write(research_block)
-        print(f"           Validation report saved: {report_path}")
+        report["status"] = "unvalidated"
+        draft_dir = _save_failed_brief(text, research_block, report)
         raise ValueError("Brief failed validation: " + "; ".join(errors)
                          + f". Draft and research preserved in {draft_dir}")
-    return (brief_header(keyword_resolution) if keyword_resolution else "") + text
+    report["status"] = "validated"
+    return text
 
 
 # ── Markdown Parser ───────────────────────────────────────────────────────────
@@ -2670,10 +1893,31 @@ def main():
     parser.add_argument("content_type", choices=CONTENT_TYPES)
     parser.add_argument("--primary-keyword-override", default=None)
     parser.add_argument("--keyword-config", default=None)
+    parser.add_argument("--priority-link-url", required=True,
+                        help="Primary CTA and required internal link URL (used verbatim)")
+    parser.add_argument("--priority-link-anchor", required=True,
+                        help="Anchor text for the priority link (used verbatim)")
+    parser.add_argument("--required-links", default=None,
+                        help="JSON file: list of {url, anchor, section} internal links to place")
     args = parser.parse_args()
     topic, content_type = args.title.strip(), args.content_type
     if not topic:
         parser.error("title must not be empty")
+    priority_link = {"url": args.priority_link_url.strip(), "anchor": args.priority_link_anchor.strip()}
+    if not priority_link["url"].startswith("https://") or not priority_link["anchor"]:
+        parser.error("--priority-link-url must be an https URL and --priority-link-anchor nonempty")
+    required_links = []
+    if args.required_links:
+        try:
+            with open(args.required_links, encoding="utf-8") as handle:
+                required_links = json.load(handle)
+        except (OSError, ValueError) as exc:
+            parser.error(f"cannot read --required-links: {exc}")
+        if not isinstance(required_links, list) or any(
+                not isinstance(r, dict) or not all(isinstance(r.get(k), str) and r[k].strip()
+                                                   for k in ("url", "anchor", "section"))
+                for r in required_links):
+            parser.error("--required-links must be a list of {url, anchor, section} objects")
     validate_env()
     print("Stage 0  Resolving the primary keyword...")
     try:
@@ -2714,26 +1958,33 @@ def main():
         keyword_data = []
 
     # ── Step 2/10: SERP + PAA ───────────────────────────────────────────────
-    print("Step 2/11  Fetching SERP results and PAA questions...")
+    import brief_quality
+    quality_rules = brief_quality.rules()
+    depth = quality_rules["serp"]["depth"]
+    print(f"Step 2/11  Fetching the top {depth} SERP for the confirmed keyword...")
     try:
-        snapshot = keyword_resolution['serp_snapshot']
-        serp_results = snapshot['organic']
-        paa_questions = snapshot.get('paa_questions', [])
-        serp_features = {'status':'returned', 'ai_overview':snapshot['ai_overview'],
-                         'featured_snippet':snapshot.get('featured_snippet', [])}
-        print(
-            f"           Got {len(serp_results)} SERP results "
-            f"and {len(paa_questions)} PAA questions"
-        )
-    except Exception as exc:
-        print(f"           Failed: {exc}")
-        serp_results, paa_questions = [], []
-        serp_features = {"ai_overview": [], "featured_snippet": [], "status": "unavailable"}
+        # The primary keyword's own SERP drives the table and AI Overview patterns.
+        deep = api.serp(search_keyword, depth)
+        judged = api.relevance(topic, search_keyword, deep["organic"])
+    except ResolutionError as exc:
+        print(f"           Blocked: {exc}")
+        sys.exit(1)
+    organic = [{**row, **page} for row, page in zip(deep["organic"], judged)]
+    serp_results = brief_quality.relevant_serp(organic, config["relevance_threshold"])
+    paa_questions = brief_quality.dedupe(deep.get("paa_questions", []), key=str.casefold)
+    serp_features = {"status": "returned", "source_keyword": search_keyword,
+                     "ai_overview": deep["ai_overview"],
+                     "featured_snippet": deep.get("featured_snippet", [])}
+    print(f"           {len(serp_results)} of {len(organic)} results relevant; "
+          f"{len(paa_questions)} PAA questions")
+    competitor_results = brief_quality.dedupe(
+        [r for r in serp_results if r.get("url") and url_domain(r["url"]) != PINGCAP_DOMAIN],
+        key=lambda r: r["url"])
 
     # ── Step 3/10: Competitor headings ──────────────────────────────────────
     print("Step 3/11  Scraping headings from top 3 competitor pages...")
     competitor_headings = []
-    for i, result in enumerate(serp_results[:3], start=1):
+    for i, result in enumerate(competitor_results[:3], start=1):
         url = result.get("url", "")
         if not url:
             continue
@@ -2764,7 +2015,7 @@ def main():
     print("Step 5/11  Fetching competitor backlinks data...")
     backlinks_data = None
     try:
-        competitor_urls = [r.get("url", "") for r in serp_results[:3] if r.get("url")]
+        competitor_urls = [r["url"] for r in competitor_results[:3]]
         if competitor_urls:
             backlinks_data = get_backlinks_data(competitor_urls)
             for bl in (backlinks_data or []):
@@ -2784,11 +2035,15 @@ def main():
             inventory_path=SITEMAP_INVENTORY_FILE,
             sitemap_url=PINGCAP_SITEMAP_URL,
         )
+        link_rules = quality_rules["internal_links"]
         internal_link_candidates = select_internal_link_candidates(
             inventory_pages,
             search_keyword,
             content_type,
-            max_links=5,
+            max_links=link_rules["max_links"],
+            path_weights=link_rules["path_weights"],
+            target_path=brief_quality.page_url(content_type, search_keyword),
+            same_directory_weight=link_rules["same_directory_weight"],
         )
         internal_link_candidates = validate_internal_link_candidates(
             internal_link_candidates
@@ -2804,7 +2059,22 @@ def main():
             print("           No topically relevant sitemap pages found")
     except Exception as exc:
         print(f"           Failed: {exc}")
-        internal_link_candidates = []
+        inventory_pages, internal_link_candidates = [], []
+    # The priority link and any required links must be live, indexable PingCAP pages.
+    mandated = [dict(priority_link, rule="priority link (required)")] + [
+        dict(link, rule="required link", required_section=link["section"]) for link in required_links]
+    for link in mandated:
+        checked = validate_internal_link_candidates([{"url": link["url"]}])
+        if not checked:
+            print(f"           Blocked: {link['rule']} {link['url']} is not a live, indexable PingCAP page")
+            sys.exit(1)
+        entry = {**checked[0], "url": link["url"], "anchor": link["anchor"], "selection_rule": link["rule"]}
+        if link.get("required_section"):
+            entry["required_section"] = link["required_section"]
+        internal_link_candidates = [entry] + [c for c in internal_link_candidates if c["url"] != link["url"]]
+    for index, item in enumerate(internal_link_candidates, start=1):
+        item["slot"] = index
+    print(f"           Priority link placed: {priority_link['url']}")
 
     # ── Step 7/11: SEMrush — keyword intent ─────────────────────────────────
     print("Step 7/11  Fetching keyword intent from SEMrush...")
@@ -2878,6 +2148,43 @@ def main():
 
     # ── Step 10/10: Generate brief with Claude ───────────────────────────────
     print("Step 11/11 Generating content brief with Claude...")
+    verified_urls = {p["url"] for p in inventory_pages
+                     if p.get("is_live") is not False and p.get("indexable") is not False}
+    verified_urls |= {c["url"] for c in internal_link_candidates}
+    url_checks, case_texts = {}, {}
+
+    def url_verifier(url):
+        # Sitemap pages count as verified; anything else must answer with a non-error status.
+        if url in verified_urls:
+            return True
+        if url not in url_checks:
+            try:
+                if url_domain(url).endswith(PINGCAP_DOMAIN):
+                    url_checks[url] = bool(validate_internal_link_candidates([{"url": url}]))
+                else:
+                    url_checks[url] = requests.get(url, timeout=15, allow_redirects=True).status_code < 400
+            except requests.RequestException:
+                url_checks[url] = False
+        return url_checks[url]
+
+    def case_study_text(name):
+        if name not in case_texts:
+            url = next((c["url"] for c in brief_quality.roster() if c["name"] == name), None)
+            try:
+                html = requests.get(url, timeout=20).text if url else ""
+                case_texts[name] = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
+            except requests.RequestException:
+                case_texts[name] = None  # Unverifiable: claims get the verify marker.
+        return case_texts[name]
+
+    try:
+        entities = api.extract(topic)
+    except ResolutionError:
+        entities = {}
+    quality_context = {"url_verifier": url_verifier, "case_study_text": case_study_text,
+                       "competitor": entities.get("competitor") or None,
+                       "serp_source_keyword": serp_features["source_keyword"]}
+    quality_report = {}
     try:
         brief = generate_brief(
             topic,
@@ -2892,10 +2199,18 @@ def main():
             internal_link_candidates=internal_link_candidates,
             serp_features=serp_features,
             keyword_resolution=keyword_resolution,
+            priority_link=priority_link,
+            required_links=required_links,
+            quality_context=quality_context,
+            report=quality_report,
         )
         print("           Brief generated successfully")
     except Exception as exc:
-        print(f"           Claude API failed: {exc}")
+        print(f"           Brief generation failed: {exc}")
+        with open(audit_path, 'w', encoding='utf-8') as handle:
+            json.dump({'status':'unvalidated', 'keyword_resolution':keyword_resolution,
+                       'checks':quality_report.get('checks', []), 'errors':quality_report.get('errors', [str(exc)])},
+                      handle, indent=2, ensure_ascii=False)
         sys.exit(1)
 
     safe_title = re.sub(r"[^\w\s-]", "", topic[:50]).strip().replace(" ", "_")
@@ -2904,8 +2219,9 @@ def main():
         f.write(brief)
     print(f"           Brief saved locally: {local_path}")
     with open(audit_path, 'w', encoding='utf-8') as handle:
-        json.dump({'status':'validated', 'keyword_resolution':keyword_resolution,
-                   'brief_path':local_path}, handle, indent=2, ensure_ascii=False)
+        json.dump({'keyword_resolution':keyword_resolution, **quality_report,
+                   'status':'validated', 'brief_path':local_path},
+                  handle, indent=2, ensure_ascii=False)
 
     # ── Step 10/10 cont: Create Google Doc ──────────────────────────────────
     print("           Creating Google Doc...")

@@ -1,0 +1,26 @@
+# Fallback for blog, product and playbook pages.
+content_types:
+- blog
+- product
+- playbook
+max_h2: 10
+faq_section: faqs
+primary_cta_section: closing
+mechanism_section: null
+word_weights: null
+sections:
+- id: faqs
+  position: -2
+  label: FAQs
+  match:
+  - (?i)\bfaqs?\b
+  - (?i)frequently asked
+- id: closing
+  position: -1
+  label: Closing section with the primary CTA
+  match:
+  - .
+guidance: |
+  For this content type, end the outline with a FAQ H2 followed by a closing H2
+  that resolves the intro and holds the primary CTA.
+checklist: ''
