@@ -1911,7 +1911,7 @@ def validate_brief(content, content_type, candidates, plan):
     return errors
 
 
-def generate_brief(topic, content_type, keyword_data, serp_results, paa_questions, competitor_headings, llm_mentions_data=None, backlinks_data=None, semrush_data=None, internal_link_candidates=None, serp_features=None):
+def generate_brief(topic, content_type, keyword_data, serp_results, paa_questions, competitor_headings, llm_mentions_data=None, backlinks_data=None, semrush_data=None, internal_link_candidates=None, serp_features=None, keyword_resolution=None):
     """Load examples + feedback, build the system prompt, and call Claude."""
     try:
         brief_max_tokens = int(os.getenv("ANTHROPIC_MAX_TOKENS") or "16000")
@@ -1919,6 +1919,8 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
         raise ValueError("ANTHROPIC_MAX_TOKENS must be a positive integer") from exc
     if brief_max_tokens <= 0:
         raise ValueError("ANTHROPIC_MAX_TOKENS must be a positive integer")
+
+    from keyword_resolver import brief_header
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -1960,6 +1962,13 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
 {json.dumps(competitor_headings, indent=2)}
 ```
 """
+
+    if keyword_resolution is not None:
+        research_block += "\n## Confirmed Keyword Resolution (authoritative)\n" + json.dumps(keyword_resolution, indent=2)
+        research_block += ("\nUse primary_keyword for the target keyword and search-intent analysis. "
+                           "Keep title_angle as the article H1/angle. Unselected candidates are "
+                           "supporting keyword candidates only; discarded or unvalidated terms "
+                           "are not verified recommendations. Do not treat the title as the keyword.\n")
 
     plan = word_count_plan(keyword_data, semrush_data, content_type)
     research_block += "\n## Word Count Plan (mandatory)\n" + json.dumps(plan, indent=2)
@@ -2077,7 +2086,8 @@ and do not create an internal link.
         draft_path = os.path.join(draft_dir, "draft.md")
         with open(draft_path, "w", encoding="utf-8") as handle:
             handle.write("<!-- UNVALIDATED DRAFT: not approved for publication. "
-                         "See validation.json. -->\n\n" + text)
+                         "See validation.json. -->\n\n" +
+                         (brief_header(keyword_resolution) if keyword_resolution else "") + text)
         print(f"           Unvalidated draft saved: {draft_path}")
         report_path = os.path.join(draft_dir, "validation.json")
         with open(report_path, "w", encoding="utf-8") as handle:
@@ -2089,13 +2099,14 @@ and do not create an internal link.
                 "stop_reason": message.stop_reason,
                 "errors": errors,
                 "word_count_plan": plan,
+                "keyword_resolution": keyword_resolution,
             }, handle, indent=2, ensure_ascii=False)
         with open(os.path.join(draft_dir, "research.md"), "w", encoding="utf-8") as handle:
             handle.write(research_block)
         print(f"           Validation report saved: {report_path}")
         raise ValueError("Brief failed validation: " + "; ".join(errors)
                          + f". Draft and research preserved in {draft_dir}")
-    return text
+    return (brief_header(keyword_resolution) if keyword_resolution else "") + text
 
 
 # ── Markdown Parser ───────────────────────────────────────────────────────────
@@ -2650,42 +2661,41 @@ def validate_env():
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage:  python brief.py \"<topic>\" <content_type>")
-        print(f"Types:  {', '.join(CONTENT_TYPES)}")
-        print('Example: python brief.py "best database for AI agents" listicle')
-        sys.exit(1)
+    import argparse
+    from keyword_resolver import Cache, ResearchAPI, Resolver, ResolutionError, load_config
+    from keyword_confirmation import confirmation_screen
 
-    topic = sys.argv[1].strip()
-    content_type = sys.argv[2].strip().lower()
-
-    # ── Extract the primary keyword for API calls ─────────────────────────────
-    # When the user provides a full prompt as the topic, extract just the
-    # primary keyword for SEMrush, DataForSEO, and SERP API calls.
-    # Look for "Primary keyword: X" pattern first, then fall back to first
-    # sentence or first 80 characters, whichever is shorter.
-    import re as _re
-    _kw_match = _re.search(
-        r'[Pp]rimary\s+keyword[:\s]+([^\.\n,]+)',
-        topic
-    )
-    if _kw_match:
-        search_keyword = _kw_match.group(1).strip().rstrip('.')
-    elif len(topic) > 80:
-        # Use first sentence if available, else first 80 chars
-        _first_sent = topic.split('.')[0].strip()
-        search_keyword = _first_sent if len(_first_sent) <= 80 else topic[:80]
-    else:
-        search_keyword = topic
-
-    # Cap at 100 chars to be safe with all APIs
-    search_keyword = search_keyword[:100]
-
-    if content_type not in CONTENT_TYPES:
-        print(f"Error: content_type must be one of: {', '.join(CONTENT_TYPES)}")
-        sys.exit(1)
-
+    parser = argparse.ArgumentParser(description="Generate a brief after explicit keyword confirmation")
+    parser.add_argument("title", help="Article H1/title angle; never used directly as a keyword")
+    parser.add_argument("content_type", choices=CONTENT_TYPES)
+    parser.add_argument("--primary-keyword-override", default=None)
+    parser.add_argument("--keyword-config", default=None)
+    args = parser.parse_args()
+    topic, content_type = args.title.strip(), args.content_type
+    if not topic:
+        parser.error("title must not be empty")
     validate_env()
+    print("Stage 0  Resolving the primary keyword...")
+    try:
+        config = load_config(args.keyword_config)
+        cache = Cache(os.path.join(SCRIPT_DIR, '.keyword_cache'), config['cache_ttl_seconds'])
+        api = ResearchAPI(config, cache, DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD,
+                          anthropic.Anthropic(api_key=ANTHROPIC_API_KEY), ANTHROPIC_HAIKU_MODEL,
+                          semrush_key=SEMRUSH_API_KEY, cost_callback=record_api_cost)
+        resolver = Resolver(api, config)
+        proposal = resolver.resolve(topic, content_type, args.primary_keyword_override)
+        keyword_resolution = confirmation_screen(resolver, proposal)
+    except ResolutionError as exc:
+        print(f"           Stage 0 blocked: {exc}")
+        sys.exit(1)
+    search_keyword = keyword_resolution['primary_keyword']
+    # Save confirmation immediately so later provider/export errors cannot lose it.
+    audit_dir = tempfile.mkdtemp(prefix='brief_run_', dir=os.getcwd())
+    audit_path = os.path.join(audit_dir, 'validation.json')
+    with open(audit_path, 'w', encoding='utf-8') as handle:
+        json.dump({'status':'keyword_confirmed', 'keyword_resolution':keyword_resolution},
+                  handle, indent=2, ensure_ascii=False)
+    print(f"           Keyword confirmation saved: {audit_path}")
 
     print("\n=== Content Brief Generator ===")
     print(f"Topic        : {topic[:100]}{'...' if len(topic) > 100 else ''}")
@@ -2706,7 +2716,11 @@ def main():
     # ── Step 2/10: SERP + PAA ───────────────────────────────────────────────
     print("Step 2/11  Fetching SERP results and PAA questions...")
     try:
-        serp_results, paa_questions, serp_features = get_serp_and_paa(search_keyword)
+        snapshot = keyword_resolution['serp_snapshot']
+        serp_results = snapshot['organic']
+        paa_questions = snapshot.get('paa_questions', [])
+        serp_features = {'status':'returned', 'ai_overview':snapshot['ai_overview'],
+                         'featured_snippet':snapshot.get('featured_snippet', [])}
         print(
             f"           Got {len(serp_results)} SERP results "
             f"and {len(paa_questions)} PAA questions"
@@ -2877,6 +2891,7 @@ def main():
             semrush_data=semrush_data,
             internal_link_candidates=internal_link_candidates,
             serp_features=serp_features,
+            keyword_resolution=keyword_resolution,
         )
         print("           Brief generated successfully")
     except Exception as exc:
@@ -2888,6 +2903,9 @@ def main():
     with open(local_path, "w", encoding="utf-8") as f:
         f.write(brief)
     print(f"           Brief saved locally: {local_path}")
+    with open(audit_path, 'w', encoding='utf-8') as handle:
+        json.dump({'status':'validated', 'keyword_resolution':keyword_resolution,
+                   'brief_path':local_path}, handle, indent=2, ensure_ascii=False)
 
     # ── Step 10/10 cont: Create Google Doc ──────────────────────────────────
     print("           Creating Google Doc...")

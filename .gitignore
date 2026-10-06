@@ -29,3 +29,9 @@ Thumbs.db
 # Output files
 
 brief\_\*.md
+
+
+# Stage 0 response cache and per-run confirmation records
+.keyword_cache/
+brief_run_*/
+brief_failed_*/
