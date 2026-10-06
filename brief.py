@@ -2662,7 +2662,7 @@ def validate_env():
 
 def main():
     import argparse
-    from keyword_resolver import Cache, ResearchAPI, Resolver, ResolutionError, load_config
+    from keyword_resolver import Cache, ResearchAPI, Resolver, ResolutionError, load_config, validate_resolution
     from keyword_confirmation import confirmation_screen
 
     parser = argparse.ArgumentParser(description="Generate a brief after explicit keyword confirmation")
@@ -2684,7 +2684,7 @@ def main():
                           semrush_key=SEMRUSH_API_KEY, cost_callback=record_api_cost)
         resolver = Resolver(api, config)
         proposal = resolver.resolve(topic, content_type, args.primary_keyword_override)
-        keyword_resolution = confirmation_screen(resolver, proposal)
+        keyword_resolution = validate_resolution(confirmation_screen(resolver, proposal))
     except ResolutionError as exc:
         print(f"           Stage 0 blocked: {exc}")
         sys.exit(1)

@@ -224,10 +224,14 @@ python3 brief.py "TiDB Cloud Zero vs Supabase for AI Agent Backends" comparison 
 
 Every run opens a local confirmation screen and prints its URL in Terminal.
 Enter your name; use arrow keys or the radio buttons to select a candidate, then
-press Enter or Confirm. Warnings disable confirmation until **I've checked this**
-is selected. The override field on the same screen must be validated before you
-can continue. A command-line override also requires this confirmation; it is not
-expanded or silently replaced. Cancel or Ctrl+C blocks generation. There is no
+press Enter or Confirm. Below the options, a **Top 10 results for this keyword**
+panel shows each result's rank, linked title, domain, page type, angle relevance
+(✅ at or above `relevance_threshold`, ❌ below) and a different-brand flag, plus
+a **View live on Google** link. Warnings disable confirmation until **I've reviewed
+these results and this keyword still fits my article** is ticked. The override
+field on the same screen must be validated before you can continue. A
+command-line override also requires this confirmation; it is not expanded or
+silently replaced. Cancel or Ctrl+C blocks generation. There is no
 unattended/auto-confirm option. This is a temporary, loopback-only screen, not a
 hosted web service.
 
@@ -251,19 +255,29 @@ SEMrush authority score. Missing metrics are never estimated.
 GSC is not integrated in this CLI. Cannibalization therefore uses PingCAP URLs in
 the selected top-10 SERP and labels that fallback. Absence from that snapshot does
 not prove no existing page targets the term. Short, unusually high-volume terms
-require acknowledgment; terms whose results clearly concern a different brand
-are discarded. AI Overview opportunity is based on the returned snapshot only.
+require acknowledgment; automatically generated terms whose results clearly
+concern a different brand are discarded. AI Overview opportunity is based on the returned snapshot only.
 
-If all candidates, including parent terms, miss the volume floor, or the best
-candidate has fewer than five relevant results, Stage 0 blocks and says the run
-is routed to the SEO owner. This is a manual handoff message, not an automated
-notification. Provider failures also block Stage 0; no brief-generation call is
-made. Successful Stage 0 responses are cached in `.keyword_cache/` beside the
+If all automatic candidates, including parent terms, miss the volume floor, or
+the best candidate has fewer than five relevant results, Stage 0 blocks and says
+the run is routed to the SEO owner. This is a manual handoff message, not an
+automated notification.
+
+A writer's override is handled differently. If it is below the volume floor, has
+too few relevant results, or its results look like a different brand, it is
+still offered as an option with a warning for each failed check, and it can be
+confirmed only after the acknowledgment is ticked. The brief header and
+`validation.json` record `override_below_threshold` and the failed checks. A
+blank or over-long override, or one with no DataForSEO volume/difficulty, shows
+an inline error; the existing options stay usable. Provider failures (DataForSEO,
+SEMrush or the LLM failing or returning unusable data) still end the run; no
+brief-generation call is made. Successful Stage 0 responses are cached in `.keyword_cache/` beside the
 script for 24 hours. Delete that directory to refresh research early. Cache and
 run-output directories are ignored by Git. Paid API calls still occur on misses.
 
 The generated Markdown/Google Doc begins with the confirmed keyword, name/time,
-selection source, runner-up scores and acknowledged warnings. The same resolution
+selection source, whether an override was confirmed below threshold (and which
+checks failed), runner-up scores and acknowledged warnings. The same resolution
 object is saved immediately to `brief_run_*/validation.json`, then marked validated
 on success; failed brief validation also includes it in the existing
 `brief_failed_*/validation.json`. Keep the ordinary brief-generation and validation

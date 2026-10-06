@@ -4,8 +4,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-from keyword_resolver import (Cache, ResearchAPI, Resolver, ResolutionError, SEOReviewRequired,
-                              load_config, generate_candidates, score, confirm_resolution, brief_header)
+from keyword_resolver import (Cache, ProviderError, ResearchAPI, Resolver, ResolutionError, SEOReviewRequired,
+                              load_config, generate_candidates, score, confirm_resolution, brief_header,
+                              validate_resolution)
 
 TITLE = 'TiDB Cloud Zero vs Supabase for AI Agent Backends'
 ENTITIES = {'product':'TiDB Cloud Zero','competitor':'Supabase','category':'AI agent backend',
@@ -103,7 +104,7 @@ class ResolutionTests(unittest.TestCase):
     def test_enter_disabled_until_warning_acknowledged(self):
         self.api.rank=True
         p=self.resolver.resolve(TITLE,'comparison')
-        with self.assertRaisesRegex(ResolutionError,'Acknowledge'):
+        with self.assertRaisesRegex(ResolutionError,"Review the warnings and tick .I've reviewed these results"):
             confirm_resolution(p,0,'Akshata')
         r=confirm_resolution(p,0,'Akshata',True)
         self.assertIn('https://www.pingcap.com/existing/',r['warnings'][0]['message'])
@@ -111,13 +112,73 @@ class ResolutionTests(unittest.TestCase):
 
     def test_collision_discard_and_suspicion(self):
         self.api.volume=50000; self.api.collision=True
+        self.cfg['collision_max_words']=20  # every automatic candidate is a suspect
         with self.assertRaises(SEOReviewRequired):
-            self.resolver.resolve(TITLE,'comparison','tiadvisor')
+            self.resolver.resolve(TITLE,'comparison')
+        self.cfg['collision_max_words']=2
         self.api.collision=False
         p=self.resolver.resolve(TITLE,'comparison','tiadvisor')
         self.assertTrue(any('collision' in w for w in p['options'][0]['warnings']))
         with self.assertRaises(ResolutionError):
             confirm_resolution(p,0,'Akshata')
+
+    def assert_weak_override(self,p,expected):
+        option=p['options'][0]
+        self.assertEqual(len(p['options']),1)
+        self.assertEqual(option['status'],'needs writer confirmation')
+        self.assertEqual(option['threshold_failures'],expected)
+        for message in expected:self.assertIn(message,option['warnings'])
+        with self.assertRaisesRegex(ResolutionError,'Review the warnings'):
+            confirm_resolution(p,0,'Akshata')
+        r=confirm_resolution(p,0,'Akshata',True)
+        self.assertTrue(r['confirmation']['override_below_threshold'])
+        self.assertEqual(r['confirmation']['threshold_failures'],expected)
+        self.assertIs(validate_resolution(r),r)
+        header=brief_header(r)
+        self.assertIn('Override below threshold: yes',header)
+        for message in expected:self.assertIn(message.replace("'",""),header.replace("'",""))
+        return r
+
+    def test_weak_override_low_volume_needs_confirmation(self):
+        self.api.volume=40
+        p=self.resolver.resolve(TITLE,'comparison','tiny keyword')
+        self.assert_weak_override(p,['Only 40 monthly searches (minimum 50).'])
+        self.assertEqual(self.api.metrics_calls,[['tiny keyword']],'override is not expanded to parents')
+
+    def test_weak_override_few_relevant_pages_needs_confirmation(self):
+        self.api.relevant=3
+        p=self.resolver.resolve(TITLE,'comparison','loose keyword')
+        self.assert_weak_override(p,["3 of 10 top results match your article's angle (minimum 5)."])
+
+    def test_weak_override_collision_needs_confirmation(self):
+        self.api.volume=50000; self.api.collision=True
+        p=self.resolver.resolve(TITLE,'comparison','tiadvisor')
+        self.assertTrue(any('Brand-collision suspicion' in w for w in p['options'][0]['warnings']))
+        self.assert_weak_override(p,['Top results look like a different brand or topic.'])
+
+    def test_weak_override_reports_every_failed_check(self):
+        self.api.volume=10; self.api.relevant=0
+        p=self.resolver.resolve(TITLE,'comparison','two failures')
+        self.assert_weak_override(p,['Only 10 monthly searches (minimum 50).',
+                                     "0 of 10 top results match your article's angle (minimum 5)."])
+
+    def test_strong_override_records_no_threshold_failure(self):
+        p=self.resolver.resolve(TITLE,'comparison','supabase alternative')
+        self.assertEqual(p['options'][0]['status'],'eligible')
+        r=confirm_resolution(p,0,'Akshata')
+        self.assertFalse(r['confirmation']['override_below_threshold'])
+        self.assertEqual(r['confirmation']['threshold_failures'],[])
+        self.assertIn('Override below threshold: no',brief_header(r))
+
+    def test_automatic_path_still_routes_to_seo_owner(self):
+        self.api.volume=10
+        with self.assertRaises(SEOReviewRequired):self.resolver.resolve(TITLE,'comparison')
+        self.api.volume=None; self.api.relevant=3
+        with self.assertRaises(SEOReviewRequired):self.resolver.resolve(TITLE,'comparison')
+
+    def test_proposal_carries_page_thresholds(self):
+        p=self.resolver.resolve(TITLE,'comparison')
+        self.assertEqual((p['relevance_threshold'],p['min_relevant_pages']),(0.6,5))
 
     def test_override_only_validated_not_expanded(self):
         p=self.resolver.resolve(TITLE,'comparison','Supabase alternative')
@@ -134,13 +195,79 @@ class ResolutionTests(unittest.TestCase):
 
     def test_unknown_metrics_not_estimated(self):
         self.api.metrics=lambda ks:{k:{'msv':None,'difficulty':None,'metric_status':'unavailable'} for k in ks}
-        with self.assertRaisesRegex(ResolutionError,'unavailable'):
+        with self.assertRaisesRegex(ResolutionError,'unavailable') as raised:
             self.resolver.resolve(TITLE,'comparison','test keyword')
+        self.assertNotIsInstance(raised.exception,ProviderError,'writer can retry another phrasing')
+
+    def test_duplicate_variants_deduplicated_before_metrics(self):
+        self.api.variants=lambda head:['Supabase Alternative','supabase  alternative','supabase alternative']
+        self.resolver.resolve(TITLE,'comparison')
+        first=self.api.metrics_calls[0]
+        self.assertEqual(len(first),len(set(first)))
+        self.assertEqual(first.count('supabase alternative'),1)
+
+    def test_parent_retry_runs_before_unavailable_metrics_error(self):
+        self.api.metrics=lambda ks:(self.api.metrics_calls.append(ks) or {k:{'msv':None,'difficulty':None,'metric_status':'unavailable'} for k in ks})
+        with self.assertRaisesRegex(ResolutionError,'unavailable for'):
+            self.resolver.resolve(TITLE,'comparison')
+        self.assertEqual(len(self.api.metrics_calls),2)
+        self.assertIn('backend platform',self.api.metrics_calls[-1])
+
+    def test_invalid_option_index_message(self):
+        p=self.resolver.resolve(TITLE,'comparison')
+        for index in [-1,len(p['options']),'0',None,True]:
+            with self.assertRaisesRegex(ResolutionError,'option 1–'):
+                confirm_resolution(p,index,'Akshata')
+
+    def test_blank_confirmer_rejected(self):
+        p=self.resolver.resolve(TITLE,'comparison')
+        for name in ['','   ',None]:
+            with self.assertRaisesRegex(ResolutionError,'name'):
+                confirm_resolution(p,0,name)
+
+    def test_invalid_override_text_rejected(self):
+        for value in ['','   ','x'*101]:
+            with self.assertRaisesRegex(ResolutionError,'at most 100'):
+                self.resolver.resolve(TITLE,'comparison',value)
 
     def test_close_call(self):
         self.api.volume=200
         p=self.resolver.resolve(TITLE,'comparison')
         self.assertTrue(p['close_call'])
+
+
+class ResolutionContractTests(unittest.TestCase):
+    def setUp(self):
+        p=Resolver(FixtureAPI(),load_config()).resolve(TITLE,'comparison')
+        self.valid=confirm_resolution(p,0,'Akshata')
+
+    def mutated(self,path,value):
+        import copy
+        r=copy.deepcopy(self.valid);node=r
+        for key in path[:-1]:node=node[key]
+        if value is KeyError:del node[path[-1]]
+        else:node[path[-1]]=value
+        return r
+
+    def test_confirmed_resolution_passes(self):
+        self.assertIs(validate_resolution(self.valid),self.valid)
+
+    def test_malformed_resolution_names_field(self):
+        cases=[(['primary_keyword'],''),(['primary_keyword'],KeyError),(['title_angle'],None),
+               (['primary_metrics','msv'],None),(['primary_metrics','msv'],-1),(['primary_metrics','difficulty'],101),
+               (['scores'],[]),(['supporting_candidates'],{}),(['supporting_candidates',0,'scores'],{'total':None}),
+               (['serp_snapshot','organic'],None),(['serp_snapshot','organic'],['x']),(['serp_snapshot','ai_overview'],KeyError),
+               (['serp_snapshot','paa_questions'],'q'),(['warnings'],[{'message':'m','acknowledged':False}]),
+               (['confirmation','confirmed_by'],' '),(['confirmation','was_default'],'yes'),(['confirmation'],KeyError),
+               (['confirmation','override_below_threshold'],KeyError),(['confirmation','override_below_threshold'],True),
+               (['confirmation','threshold_failures'],None),(['confirmation','threshold_failures'],['Only 1 monthly searches.'])]
+        for path,value in cases:
+            field='.'.join(str(p) if isinstance(p,str) else f'[{p}]' for p in path).replace('.[','[')
+            with self.subTest(field=field,value=value):
+                with self.assertRaisesRegex(ResolutionError,'field '+field.split('[')[0].split('.')[0]):
+                    validate_resolution(self.mutated(path,value))
+        with self.assertRaisesRegex(ResolutionError,'field resolution'):
+            validate_resolution(None)
 
 
 class ProviderTests(unittest.TestCase):
@@ -152,6 +279,67 @@ class ProviderTests(unittest.TestCase):
             self.assertIsNone(cache.get(['serp','b']))
             now[0]+=86400
             self.assertIsNone(cache.get(['serp','a']))
+
+    def test_future_dated_cache_entry_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            now=[1000]
+            cache=Cache(d,86400,lambda:now[0]);cache.put(['serp','a'],{'ok':1})
+            now[0]=500  # clock moved backwards
+            self.assertIsNone(cache.get(['serp','a']))
+
+    def test_corrupt_cache_entry_is_a_miss(self):
+        with tempfile.TemporaryDirectory() as d:
+            cache=Cache(d);cache.put(['serp','a'],{'ok':1})
+            for f in Path(d).glob('*.json'):f.write_text('{not json')
+            self.assertIsNone(cache.get(['serp','a']))
+
+    def test_metrics_response_case_and_spacing_normalized(self):
+        with tempfile.TemporaryDirectory() as d:
+            api=ResearchAPI(load_config(),Cache(d),'login','password',Mock(),'test',session=Mock())
+            api.post=Mock(side_effect=[[{'keyword':'Supabase  Alternative','search_volume':900}],
+                                       [{'items':[{'keyword':'SUPABASE ALTERNATIVE','keyword_difficulty':40}]}]])
+            row=api.metrics(['supabase alternative'])['supabase alternative']
+            self.assertEqual((row['msv'],row['difficulty'],row['metric_status']),(900,40,'available'))
+
+    def test_missing_and_invalid_metrics(self):
+        with tempfile.TemporaryDirectory() as d:
+            api=ResearchAPI(load_config(),Cache(d),'login','password',Mock(),'test',session=Mock())
+            api.post=Mock(side_effect=[[{'keyword':'a','search_volume':None}],[{'items':[]}]])
+            self.assertEqual(api.metrics(['a'])['a']['metric_status'],'unavailable')
+            api.post=Mock(side_effect=[[{'keyword':'b','search_volume':-5}],[{'items':[]}]])
+            with self.assertRaisesRegex(ProviderError,'invalid search volume for b'):api.metrics(['b'])
+            api.post=Mock(side_effect=[[{'keyword':'c','search_volume':5}],[{'items':[{'keyword':'c','keyword_difficulty':150}]}]])
+            with self.assertRaisesRegex(ProviderError,'invalid keyword difficulty for c'):api.metrics(['c'])
+
+    def test_judgment_errors_name_keyword_and_counts(self):
+        api=ResearchAPI(load_config(),Mock(),'login','password',Mock(),'test',session=Mock())
+        api.judge=Mock(return_value={'pages':[{'index':0,'relevance':0.5,'page_type':'docs','different_brand':False}]})
+        with self.assertRaisesRegex(ResolutionError,'"kw" returned 1 pages; expected 2'):
+            api.relevance(TITLE,'kw',[{},{}])
+        api.judge=Mock(return_value={'pages':[{'index':0,'relevance':2,'page_type':'docs','different_brand':False}]})
+        with self.assertRaisesRegex(ResolutionError,'invalid fields at result 0'):
+            api.relevance(TITLE,'kw',[{}])
+
+    def test_entity_extraction_names_missing_fields(self):
+        api=ResearchAPI(load_config(),Mock(),'login','password',Mock(),'test',session=Mock())
+        api.judge=Mock(return_value={**ENTITIES,'task':'','head_entity':None})
+        with self.assertRaisesRegex(ResolutionError,'task, head_entity'):
+            api.extract(TITLE)
+
+    def test_config_errors_name_fields(self):
+        base=json.loads((Path(__file__).resolve().parents[1]/'config/keyword_resolver.json').read_text())
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'c.json'
+            for change,pattern in [({'min_msv':KeyError},'missing: min_msv'),({'min_msv':0},'positive integers: min_msv'),
+                                   ({'relevance_threshold':1.5},'zero and one: relevance_threshold')]:
+                cfg={**base}
+                for k,v in change.items():
+                    if v is KeyError:del cfg[k]
+                    else:cfg[k]=v
+                path.write_text(json.dumps(cfg))
+                with self.assertRaisesRegex(ResolutionError,pattern):load_config(path)
+            path.write_text('[]')
+            with self.assertRaisesRegex(ResolutionError,'JSON object'):load_config(path)
 
     def test_metrics_endpoints_and_per_keyword_cache(self):
         with tempfile.TemporaryDirectory() as d:
@@ -170,7 +358,32 @@ class ProviderTests(unittest.TestCase):
         response=Mock();response.json.return_value={'status_code':20000,'tasks':[{'status_code':40100,'status_message':'bad auth'}]}
         session=Mock();session.post.return_value=response
         api=ResearchAPI(load_config(),Mock(),'login','password',Mock(),'test',session=session)
-        with self.assertRaises(ResolutionError):api.post('x',{})
+        with self.assertRaises(ProviderError):api.post('x',{})
+        session.post.side_effect=OSError('network down')
+        with self.assertRaisesRegex(ProviderError,'OSError'):api.post('x',{})
+
+    def test_llm_semrush_and_serp_failures_are_provider_errors(self):
+        client=Mock();client.messages.create.side_effect=RuntimeError('overloaded')
+        with tempfile.TemporaryDirectory() as d:
+            api=ResearchAPI(load_config(),Cache(d),'login','password',client,'test',session=Mock())
+            with self.assertRaises(ProviderError):api.extract(TITLE)
+            client.messages.create.side_effect=None
+            client.messages.create.return_value=Mock(stop_reason='max_tokens',content=[])
+            with self.assertRaisesRegex(ProviderError,'truncated'):api.relevance(TITLE,'kw',[{}])
+            api.judge=Mock(return_value=['not an object'])
+            with self.assertRaises(ProviderError):api.extract(TITLE)
+            api.post=Mock(return_value=[{'items':None}])
+            with self.assertRaisesRegex(ProviderError,'SERP response is unavailable'):api.serp('a')
+            api.post=Mock(return_value=[])
+            api.semrush_key='key'
+            for text in ['ERROR 120 :: WRONG KEY','garbage']:
+                api.session.get.return_value=Mock(text=text)
+                with self.assertRaises(ProviderError):api.variants('head '+text)
+            api.session.get.side_effect=OSError('down')
+            with self.assertRaises(ProviderError):api.variants('head down')
+            api.session.get.side_effect=None
+            api.session.get.return_value=Mock(text='ERROR 50 :: NOTHING FOUND')
+            self.assertEqual(api.variants('head nothing'),[])
 
     def test_serp_citations_and_fallback(self):
         with tempfile.TemporaryDirectory() as d:

@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from keyword_confirmation import HTML, confirmation_screen
-from keyword_resolver import Resolver, ResolutionError, confirm_resolution, load_config
+from keyword_resolver import ProviderError, Resolver, ResolutionError, confirm_resolution, load_config
 from test_keyword_resolver import FixtureAPI, TITLE
 
 
@@ -38,7 +38,7 @@ class ConfirmationTests(unittest.TestCase):
                 outcome['error'] = exc
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
-        self.assertTrue(ready.wait(5))
+        self.assertTrue(ready.wait(15))
         def post(action, data, origin=None):
             req = Request(address[0]+'/'+action, json.dumps(data).encode(),
                           {'Content-Type':'application/json', **({'Origin':origin} if origin else {})})
@@ -65,6 +65,89 @@ class ConfirmationTests(unittest.TestCase):
         self.assertFalse(result['confirmation']['was_default'])
         self.assertTrue(result['warnings'][0]['acknowledged'])
         self.assertIn('supabase alternative', [r['keyword'] for r in result['supporting_candidates']])
+
+    def serve(self, resolver, proposal):
+        ready = threading.Event(); address = []; outcome = {}
+        def run():
+            try:
+                outcome['result'] = confirmation_screen(resolver, proposal, lambda u: (address.append(u), ready.set()))
+            except Exception as exc:
+                outcome['error'] = exc
+        thread = threading.Thread(target=run, daemon=True); thread.start()
+        self.assertTrue(ready.wait(15))
+        def post(action, data):
+            req = Request(address[0]+'/'+action, json.dumps(data).encode(), {'Content-Type':'application/json'})
+            try:
+                with urlopen(req, timeout=5) as response:
+                    return response.status, json.load(response)
+            except HTTPError as exc:
+                with exc:
+                    return exc.code, json.load(exc)
+        def stop():
+            if thread.is_alive():
+                try: post('cancel', {})
+                except OSError: pass
+            thread.join(5)
+        self.addCleanup(stop)
+        return post, thread, outcome
+
+    def test_provider_error_on_override_ends_run(self):
+        api = FixtureAPI(); resolver = Resolver(api, load_config())
+        proposal = resolver.resolve(TITLE, 'comparison')
+        api.metrics = Mock(side_effect=ProviderError('DataForSEO down'))
+        post, thread, outcome = self.serve(resolver, proposal)
+        status, body = post('override', {'keyword':'supabase alternatives'})
+        self.assertEqual((status, body.get('run_ended')), (422, True))
+        thread.join(5)
+        self.assertFalse(thread.is_alive())
+        self.assertNotIn('result', outcome)
+        self.assertIsInstance(outcome['error'], ProviderError)
+
+    def test_bad_override_input_keeps_run_alive(self):
+        api = FixtureAPI(); resolver = Resolver(api, load_config())
+        proposal = resolver.resolve(TITLE, 'comparison')
+        post, thread, outcome = self.serve(resolver, proposal)
+        for keyword in ['', '   ', 'x'*101, None, 7]:
+            status, body = post('override', {'keyword':keyword})
+            self.assertEqual(status, 422, keyword)
+            self.assertNotIn('run_ended', body)
+            self.assertTrue(thread.is_alive())
+        status, body = post('override', ['not', 'an', 'object'])
+        self.assertEqual(status, 422)
+        status, body = post('override', {'keyword':'supabase alternatives'})
+        self.assertEqual(status, 200)
+        self.assertEqual(body['options'][0]['keyword'], 'supabase alternatives')
+        self.assertEqual(post('confirm', {'index':0,'name':'Writer'})[0], 200)
+        thread.join(5)
+        self.assertEqual(outcome['result']['primary_keyword'], 'supabase alternatives')
+
+    def test_unavailable_override_metrics_keep_run_alive_and_options(self):
+        api = FixtureAPI(); resolver = Resolver(api, load_config())
+        proposal = resolver.resolve(TITLE, 'comparison')
+        metrics = api.metrics
+        api.metrics = lambda ks: {k:({'msv':None,'difficulty':None,'metric_status':'unavailable'} if k=='no data keyword' else v)
+                                  for k, v in metrics(ks).items()}
+        post, thread, outcome = self.serve(resolver, proposal)
+        status, body = post('override', {'keyword':'no data keyword'})
+        self.assertEqual(status, 422)
+        self.assertIn('unavailable', body['error'])
+        self.assertTrue(thread.is_alive())
+        self.assertEqual(post('confirm', {'index':0,'name':'Writer'})[0], 200, 'original options still confirmable')
+        thread.join(5)
+        self.assertEqual(outcome['result']['primary_keyword'], 'supabase alternative')
+
+    def test_weak_override_over_http_requires_acknowledgment(self):
+        api = FixtureAPI(); resolver = Resolver(api, load_config())
+        proposal = resolver.resolve(TITLE, 'comparison')
+        api.volume = 40
+        post, thread, outcome = self.serve(resolver, proposal)
+        status, body = post('override', {'keyword':'tiny keyword'})
+        self.assertEqual(status, 200)
+        self.assertEqual(body['options'][0]['status'], 'needs writer confirmation')
+        self.assertEqual(post('confirm', {'index':0,'name':'Writer','acknowledged':False})[0], 422)
+        self.assertEqual(post('confirm', {'index':0,'name':'Writer','acknowledged':True})[0], 200)
+        thread.join(5)
+        self.assertTrue(outcome['result']['confirmation']['override_below_threshold'])
 
     @unittest.skipUnless(shutil.which('node'), 'Node required for browser-script unit test')
     def test_enter_arrow_and_acknowledgment_in_actual_ui_script(self):
