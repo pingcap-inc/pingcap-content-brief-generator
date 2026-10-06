@@ -4,7 +4,7 @@ A CLI tool that generates SEO/AEO content briefs for PingCAP writers by pulling 
 
 ## What it does
 
-Runs an 11-step pipeline per topic:
+Runs required Stage 0 keyword resolution and confirmation, followed by the existing 11-step pipeline:
 
 1. DataForSEO keyword data
 2. SERP top-10 + People Also Ask
@@ -69,9 +69,9 @@ python brief.py "TiDB vs PostgreSQL" comparison
 python brief.py "Best databases for real-time analytics" listicle
 python brief.py "AI agent memory persistent state database" solution
 
-For long prompts, include "Primary keyword: your keyword" anywhere in the topic text:
+To supply a keyword for validation, use the separate override flag (confirmation is still required):
 
-python brief.py "TiDB Cloud is the unified database layer for AI agents... Primary keyword: AI agent memory" solution
+python brief.py "TiDB Cloud is the unified database layer for AI agents" solution --primary-keyword-override "AI agent memory"
 
 ## Model configuration
 
@@ -209,3 +209,80 @@ requires updating their ordinal IDs. Existing exact-heading tables remain suppor
 Unknown IDs, unmatched legacy headings, duplicate/unverified URLs, and more than two
 links per H2 still fail validation. The code does not guess semantic link placement;
 editorial relevance still requires review. No extra generation call is needed.
+
+
+## Stage 0: confirm a separate primary keyword
+
+The first positional argument is the **title / H1 angle**, not the search keyword.
+Before the existing 11 steps, Stage 0 resolves and validates a primary keyword:
+
+```bash
+python3 brief.py "TiDB Cloud Zero vs Supabase for AI Agent Backends" comparison
+python3 brief.py "TiDB Cloud Zero vs Supabase for AI Agent Backends" comparison \
+  --primary-keyword-override "supabase alternative"
+```
+
+Every run opens a local confirmation screen and prints its URL in Terminal.
+Enter your name; use arrow keys or the radio buttons to select a candidate, then
+press Enter or Confirm. Below the options, a **Top 10 results for this keyword**
+panel shows each result's rank, linked title, domain, page type, angle relevance
+(✅ at or above `relevance_threshold`, ❌ below) and a different-brand flag, plus
+a **View live on Google** link. Warnings disable confirmation until **I've reviewed
+these results and this keyword still fits my article** is ticked. The override
+field on the same screen must be validated before you can continue. A
+command-line override also requires this confirmation; it is not expanded or
+silently replaced. Cancel or Ctrl+C blocks generation. There is no
+unattended/auto-confirm option. This is a temporary, loopback-only screen, not a
+hosted web service.
+
+Stage 0 extracts title entities with the configured Haiku model, generates 10–20
+pattern candidates, expands them through DataForSEO Labs and optional SEMrush,
+and fetches measured US monthly volume and difficulty. It evaluates up to five
+SERPs using an LLM judgment of the supplied titles, URLs and snippets, then shows
+up to three choices. These are relevance judgments, not full-page factual checks.
+The chosen snapshot is reused in Step 2. All unselected candidates travel with the
+research, marked as scored, unvalidated, or discarded as appropriate.
+
+Configure patterns, weights and thresholds in `config/keyword_resolver.json`, or
+supply a complete replacement with `--keyword-config path/to/config.json`.
+Defaults: MSV >=50, at least five relevant organic results, US location 2840,
+24-hour caching. The score weights are intent 30%, angle relevance 25%, log volume
+20%, difficulty 15%, and AI Overview opportunity 10%. Difficulty is assessed
+against `pingcap_authority_baseline` (default 60), an explicit SEO planning
+parameter that should be calibrated by the SEO owner; it is not a measured
+SEMrush authority score. Missing metrics are never estimated.
+
+GSC is not integrated in this CLI. Cannibalization therefore uses PingCAP URLs in
+the selected top-10 SERP and labels that fallback. Absence from that snapshot does
+not prove no existing page targets the term. Short, unusually high-volume terms
+require acknowledgment; automatically generated terms whose results clearly
+concern a different brand are discarded. AI Overview opportunity is based on the returned snapshot only.
+
+If all automatic candidates, including parent terms, miss the volume floor, or
+the best candidate has fewer than five relevant results, Stage 0 blocks and says
+the run is routed to the SEO owner. This is a manual handoff message, not an
+automated notification.
+
+A writer's override is handled differently. If it is below the volume floor, has
+too few relevant results, or its results look like a different brand, it is
+still offered as an option with a warning for each failed check, and it can be
+confirmed only after the acknowledgment is ticked. The brief header and
+`validation.json` record `override_below_threshold` and the failed checks. A
+blank or over-long override, or one with no DataForSEO volume/difficulty, shows
+an inline error; the existing options stay usable. Provider failures (DataForSEO,
+SEMrush or the LLM failing or returning unusable data) still end the run; no
+brief-generation call is made. Successful Stage 0 responses are cached in `.keyword_cache/` beside the
+script for 24 hours. Delete that directory to refresh research early. Cache and
+run-output directories are ignored by Git. Paid API calls still occur on misses.
+
+The generated Markdown/Google Doc begins with the confirmed keyword, name/time,
+selection source, whether an override was confirmed below threshold (and which
+checks failed), runner-up scores and acknowledged warnings. The same resolution
+object is saved immediately to `brief_run_*/validation.json`, then marked validated
+on success; failed brief validation also includes it in the existing
+`brief_failed_*/validation.json`. Keep the ordinary brief-generation and validation
+rules unchanged: Stage 0 adds keyword selection and audit metadata only.
+
+Run all tests with `python3 -m unittest discover -s tests -v`. The browser-script
+unit test additionally uses Node if installed (otherwise it is explicitly skipped).
+Tests mock paid providers; they do not make live API calls.

@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "location_code": 2840,
+  "language_code": "en",
+  "cache_ttl_seconds": 86400,
+  "min_msv": 50,
+  "min_relevant_pages": 5,
+  "relevance_threshold": 0.6,
+  "shortlist_size": 5,
+  "max_candidates": 60,
+  "generated_candidates": 20,
+  "close_call_fraction": 0.1,
+  "volume_log_ceiling": 10000,
+  "pingcap_authority_baseline": 60,
+  "authority_note": "Configurable SEO planning baseline, not a fetched domain-authority metric.",
+  "collision_max_words": 2,
+  "collision_volume_threshold": 10000,
+  "collision_unrelated_fraction": 0.6,
+  "weights": {
+    "intent": 0.3,
+    "relevance": 0.25,
+    "volume": 0.2,
+    "difficulty": 0.15,
+    "ai_opportunity": 0.1
+  },
+  "aliases": {
+    "blog": "explainer",
+    "solution": "product",
+    "guide": "playbook",
+    "alternative": "comparison"
+  },
+  "intent_types": {
+    "comparison": [
+      "comparison",
+      "listicle"
+    ],
+    "listicle": [
+      "listicle"
+    ],
+    "explainer": [
+      "explainer",
+      "docs"
+    ],
+    "playbook": [
+      "guide",
+      "docs"
+    ],
+    "product": [
+      "vendor homepage",
+      "product"
+    ]
+  },
+  "search_intents": {
+    "comparison": "commercial",
+    "listicle": "commercial",
+    "explainer": "informational",
+    "playbook": "informational",
+    "product": "transactional"
+  },
+  "patterns": {
+    "comparison": [
+      "{competitor} alternative",
+      "{competitor} alternatives",
+      "{product} vs {competitor}",
+      "{competitor} competitors",
+      "best {category}",
+      "{competitor} alternative for {category}",
+      "{category} comparison",
+      "{competitor} vs {product}",
+      "{category} platforms",
+      "{category} tools",
+      "{category} database",
+      "{product} alternatives"
+    ],
+    "listicle": [
+      "best {category}",
+      "top {category} {year}",
+      "{category} tools",
+      "{category} platforms",
+      "best {category} tools",
+      "{category} software",
+      "{category} solutions",
+      "{category} comparison",
+      "{category} providers",
+      "top {category}",
+      "best {category} for {use_case}"
+    ],
+    "explainer": [
+      "what is {entity}",
+      "{entity} explained",
+      "how does {entity} work",
+      "{entity} architecture",
+      "{entity} examples",
+      "{entity} benefits",
+      "{entity} use cases",
+      "{entity} fundamentals",
+      "{entity} concepts",
+      "{entity} overview"
+    ],
+    "playbook": [
+      "how to {task}",
+      "{task} guide",
+      "{entity} best practices",
+      "{task} tutorial",
+      "{task} steps",
+      "{task} checklist",
+      "{task} examples",
+      "{task} implementation",
+      "{task} strategy",
+      "{task} for {use_case}"
+    ],
+    "product": [
+      "{category} database",
+      "{use_case} database",
+      "{product} {category}",
+      "{category} platform",
+      "{category} service",
+      "{category} solution",
+      "{product} database",
+      "{category} features",
+      "{category} pricing",
+      "{category} for {use_case}",
+      "best {category} database"
+    ]
+  },
+  "parent_patterns": [
+    "{parent}",
+    "best {parent}",
+    "{parent} tools",
+    "{parent} database",
+    "{parent} alternatives",
+    "{parent} comparison"
+  ],
+  "intent_yes_threshold": 0.6
+}
