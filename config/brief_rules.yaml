@@ -1,0 +1,153 @@
+# Rules the brief generator enforces in code. Prompt wording lives in
+# config/prompts/ and per-type outlines in config/templates/.
+version: 1
+
+meta:
+  title_suffix: " - PingCAP"
+  title_min_chars: 50
+  title_max_chars: 60
+  description_max_chars: 140
+  slug_prefixes:
+    comparison: /compare/
+    alternative: /compare/
+    blog: /blog/
+    solution: /solutions/
+    default: /article/
+
+# Stage 0 search_intent value -> label shown in the brief.
+search_intent_labels:
+  commercial: Commercial Investigation
+  informational: Informational
+  navigational: Navigational
+  transactional: Transactional
+
+supporting_keywords:
+  max_keywords: 15
+  entity_coverage_tag: entity coverage
+
+serp:
+  depth: 20
+  min_relevant_pages: 5
+  table_min_rows: 5
+  table_max_rows: 10
+  excluded_page_patterns:
+    - '(?i)not (topically )?relevant'
+    - '(?i)\bexcluded\b'
+
+key_takeaways:
+  label: Key Takeaways
+  min_bullets: 3
+  max_bullets: 5
+  min_words: 12
+  max_words: 20
+  # The label must appear within this many non-empty lines after the H1
+  # (the intro Target line comes first).
+  max_lines_after_h1: 3
+
+# Each group must match somewhere in the H1 intro guidance.
+eeat:
+  - id: author_bio
+    all: ['(?i)author bio', '(?i)credential']
+  - id: expert_review
+    all: ['(?i)expert review']
+  - id: methodology_note
+    all: ['(?i)methodology', '(?i)rating', '(?i)pricing', '(?i)feature availability', '(?i)verif']
+
+faq:
+  min_questions: 4
+  max_questions: 6
+  max_bullets: 4
+  answer_label: Answer guidance
+  # Share of question tokens that must overlap a PAA question or LLM query.
+  source_overlap: 0.5
+  forbidden_guidance:
+    - '(?i)\b\d\s*(?:-|to|–)\s*\d\s+sentences?\b'
+  alternative_questions:
+    - id: competitor_capability
+      description: a question about a competitor capability
+      requires_competitor: true
+      # Naming the competitor is not enough: cost and migration questions don't count.
+      exclude_pattern: '(?i)\bmigrat|\bcost|\bpric|\bpay'
+    - id: migration
+      description: a question about migration
+      pattern: '(?i)\bmigrat'
+
+style:
+  forbidden_characters:
+    "—": em dash
+  banned_phrases:
+    - {id: leverage, pattern: '(?i)\bleverag(?:e|es|ed|ing)\b'}
+    - {id: seamless, pattern: '(?i)\bseamless(?:ly)?\b'}
+    - {id: straightforward, pattern: '(?i)\bstraightforward\b'}
+    - {id: battle-tested, pattern: '(?i)\bbattle[- ]tested\b'}
+    - {id: robust, pattern: '(?i)\brobust\b'}
+    - {id: comprehensive, pattern: '(?i)\bcomprehensive\b'}
+    - {id: furthermore, pattern: '(?i)\bfurthermore\b'}
+    - {id: not only but also, pattern: '(?i)\bnot only\b[^.\n]{0,120}\bbut also\b'}
+    - {id: cutting-edge, pattern: '(?i)\bcutting[- ]edge\b'}
+    - {id: game-changing, pattern: '(?i)\bgame[- ]chang(?:ing|er)\b'}
+  # Claims checked in any sentence that names TiDB.
+  tidb_claims:
+    - {id: architecturally superior, pattern: '(?i)\barchitecturally superior\b'}
+    - {id: superior, pattern: '(?i)\bsuperior\b'}
+    - {id: best, pattern: '(?i)\bbest\b(?![- ](?:fit|for|practices?)\b)'}
+
+cta:
+  primary_label: Primary CTA
+  secondary_label: Secondary CTA
+  forbidden_placeholders:
+    - '(?i)verify (?:the )?url'
+    - '(?i)url (?:to be|tbd|pending)'
+
+case_studies:
+  verify_marker: verify against case study
+  anonymized_patterns:
+    - '(?i)\ba (?:leading|large|major|global|multinational|well-known|top)\b[^.;,:\n|]{0,40}\b(?:company|firm|bank|retailer|platform|provider|agency|enterprise|startup)\b'
+    - '(?i)\ba fortune 500\b'
+  # Numbers in a customer claim are compared against the case-study text.
+  claim_number_pattern: '\b\d[\d,.]*\s*(?:%|x|ms|tb|pb|gb|billion|million|k)?\b'
+
+claims:
+  verify_marker: verify before publication
+  currency_pattern: '(?:[$€£]\s?\d|\b\d[\d,.]*\s?(?:usd|eur)\b)'
+  year_pattern: '\b20\d\d\b'
+
+reviews:
+  platforms: [G2, Capterra, Clutch]
+  required_terms: ['(?i)score', '(?i)review count', '(?i)retrieval date']
+  invented_rating_patterns:
+    - '\b[0-5](?:\.\d)?\s*(?:/\s*5|out of 5)\b'
+    - '(?i)\b[0-5](?:\.\d)?\s*stars?\b'
+    - '★'
+
+empty_data:
+  backlinks: "Backlink data unavailable for these URLs; run a manual audit."
+  llm_mentions: "LLM mentions data unavailable for this keyword; run a manual review."
+
+word_count:
+  ceiling: 4500
+  tiers:
+    - {label: "<500", max_msv: 499, minimum: 1800, maximum: 2500}
+    - {label: "500-1,999", max_msv: 1999, minimum: 2500, maximum: 3200}
+    - {label: "2,000-4,999", max_msv: 4999, minimum: 3000, maximum: 3800}
+    - {label: "5,000+", max_msv: null, minimum: 3500, maximum: 4500}
+
+internal_links:
+  max_links: 5
+  # Multipliers on the topical relevance score.
+  path_weights:
+    - {prefix: /ai/, weight: 2.0}
+    - {prefix: /solutions/, weight: 2.0}
+    - {prefix: /compare/, weight: 2.0}
+    - {prefix: /tidb/cloud/, weight: 2.0}
+    - {prefix: /article/, weight: 0.5}
+    - {prefix: /blog/, weight: 0.5}
+  same_directory_weight: 1.5
+  # Minimum shared content words between a link and the H2 it sits in. Brand words, the
+  # primary keyword, and words found in at least this share of H2s don't count.
+  section_min_shared_tokens: 1
+  section_ignore_tokens: [tidb, pingcap, cloud, database, databases]
+  section_ubiquity_fraction: 0.5
+
+repair:
+  max_rounds: 1

@@ -1,0 +1,6 @@
+# Optional: exact review-platform pages per competitor, verified by a person.
+# When a competitor is listed, the reviews section must link these URLs.
+# Example:
+#   supabase:
+#     G2: https://www.g2.com/products/...
+competitors: {}

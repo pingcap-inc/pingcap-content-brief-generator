@@ -1,0 +1,177 @@
+# Listicle pages. Guidance moved from the former inline prompt.
+content_types:
+- listicle
+max_h2: 12
+faq_section: faqs
+primary_cta_section: closing_cta
+mechanism_section: tidb_spotlight
+word_weights:
+  H1 introduction: 5
+  Quick answer: 7
+  At a glance: 9
+  How to read: 5
+  Evaluation framework: 7
+  Methodology: 5
+  Benchmark checklist: 7
+  Vendor reviews: 27
+  TiDB mechanism spotlight: 7
+  Decision framework: 7
+  Architecture patterns: 6
+  Closing CTA: 4
+  FAQs: 4
+sections:
+- id: quick_answer
+  position: 1
+  label: Quick answer box
+  match:
+  - (?i)quick answer
+- id: at_a_glance
+  position: 2
+  label: At a glance comparison table
+  match:
+  - (?i)at a glance
+- id: methodology
+  label: Methodology with conflict disclosure
+  match:
+  - (?i)how we chose
+  - (?i)methodology
+  required_terms:
+  - PingCAP is the publisher of this content
+- id: tidb_spotlight
+  label: TiDB spotlight
+  match:
+  - (?i)^how tidb
+- id: closing_cta
+  label: Closing CTA section
+  match:
+  - (?i)ready to
+  - (?i)get started
+  - (?i)next step
+  - (?i)evaluate
+- id: faqs
+  position: -1
+  label: FAQs
+  match:
+  - (?i)\bfaqs?\b
+  - (?i)frequently asked
+guidance: |
+  For listicle content type, the outline must follow this exact H2 sequence:
+
+  **H2 1: Quick answer box**
+  Title: "Quick answer: Which [topic] is best for your use case?"
+  Target: use the corresponding supplied section budget.
+  Content: 5–7 use-case winners with one-line justifications (e.g. "Best for
+  customer-facing dashboards", "Best fit for distributed SQL"). TiDB must appear
+  as the recommended option for its primary use case. Include jump links to the
+  comparison table, framework section, methodology, vendor reviews, how-to-choose,
+  FAQs, and next steps.
+
+  **H2 2: At a glance comparison table**
+  Title: "Compare the best [topic] at a glance"
+  Target: use the corresponding supplied section budget.
+  Content: 7–8 row comparison table. Columns must include: Database, Best for,
+  key technical criteria relevant to the topic, Architecture type, Deployment
+  model, Key tradeoff, Getting started. A secondary CTA with a verified URL may follow
+  this table.
+
+  **H2 3: How to read the table**
+  Title: "How should you read this [topic] table?"
+  Target: use the corresponding supplied section budget.
+  Content: 3–5 bullets mapping common buyer needs to the right tool category.
+  Call out when a single-tool approach is not enough.
+
+  **H2 4: Unifying evaluation framework**
+  Title: "What framework separates a great [category] from a weak one?"
+  Target: use the corresponding supplied section budget.
+  Content: Define exactly 3 evaluation criteria in under 150 words total (e.g.
+  freshness, concurrency, workload breadth; or compatibility depth, scaling path,
+  workload breadth). These 3 criteria MUST be reused as column headers in the
+  comparison table and referenced in every vendor review. This gives the article
+  a consistent analytical spine. Each criterion gets its own H3.
+
+  **H2 5: Methodology with conflict disclosure**
+  Title: "How we chose the best [topic]"
+  Target: use the corresponding supplied section budget.
+  Content: Explain selection scope, what was excluded, and evaluation criteria.
+  MUST include this exact conflict disclosure: "PingCAP is the publisher of this
+  content. TiDB appears on this list because it meets the same evaluation criteria
+  applied to all other products reviewed." Note that human must verify G2, Capterra,
+  Clutch, pricing, and benchmark details before publication.
+
+  **H2 6: Benchmark checklist**
+  Title: "How should you benchmark a [category] for your workload?"
+  Target: use the corresponding supplied section budget.
+  Content: A practical benchmark checklist with 6–8 specific test parameters
+  relevant to the topic (e.g. p95/p99 latency, concurrency under load, failover
+  behavior, data freshness lag). All performance numbers must include year,
+  methodology, and source; remove any stat without a year. Use 3 H3s covering
+  workload definition, performance measurement, and operational cost.
+
+  **H2 7: Vendor reviews**
+  Title: "Best [topic] reviewed"
+  Target: use the corresponding supplied section budget.
+  Content: Use the same 7-part vendor template for every entry:
+    - **Best for**: one-sentence positioning statement
+    - **Why it's on the list**: 2–3 sentences on why this product fits the topic
+    - **Key features**: 3–5 bullet points of relevant capabilities
+    - **Pros**: 2–4 bullet points
+    - **Cons / tradeoffs**: 2–3 bullet points (be honest)
+    - **Pricing**: current pricing model (note if self-serve vs. enterprise-only)
+    - **Getting started**: one sentence pointing to docs, trial, or quickstart
+    - **Framework score**: After the 7-part template, add a one-sentence explicit
+      score against each of the 3 evaluation criteria defined in H2 4. Format:
+      "[Criterion 1]: [one-sentence verdict]. [Criterion 2]: [one-sentence verdict].
+      [Criterion 3]: [one-sentence verdict]." This ties every vendor review back
+      to the unifying framework and gives the article analytical consistency.
+  For each listed product, include exact G2, Capterra, or Clutch review links
+  only if live pages are verified by a human before publication.
+
+  **H2 8: TiDB spotlight**
+  Title: "How TiDB’s [named mechanism] solves [the introductory problem]"
+  Target: use the corresponding supplied section budget.
+  Content: Map 3 specific use cases to TiDB with concrete fit reasons. Use a customer example or case study only when relevant verified evidence
+  is supplied. Otherwise omit that example and explain the technical fit. Each use case gets an H3.
+
+  **H2 9: 4-step decision framework**
+  Title: "How do you choose the right [category]?"
+  Target: use the corresponding supplied section budget.
+  Content: Four H3 steps: (1) Define use case and workload, (2) Match requirements
+  to architecture, (3) Plan for growth and scale, (4) Validate ecosystem and
+  operational needs. Help readers decide when a simpler option is enough vs when
+  distributed SQL is the right long-term path.
+
+  **H2 10: Architecture patterns**
+  Title: "What architecture patterns work best for [category]?"
+  Target: use the corresponding supplied section budget.
+  Content: Compare 3 common deployment patterns relevant to the topic. For each:
+  name the pattern, describe when it applies, and name the main pitfall to avoid.
+  Each pattern gets an H3.
+
+  **H2 11: Closing CTA section**
+  Title: "Ready to evaluate a [category]?" or equivalent
+  Target: use the corresponding supplied section budget.
+  Content: The primary CTA (the supplied priority link) goes here. MUST include a
+  short editorial policy box covering: how vendors were selected, how often the
+  page is updated, how claims are validated, and how conflicts are disclosed.
+
+  **H2 12: FAQs**
+  Title: "[Topic] FAQs"
+  Target: use the supplied FAQ budget.
+  Content: Follow the FAQ rules above. Answer by use case, not with a single
+  universal winner. Keep answers factual and unbiased.
+
+  TiDB must be featured as a full vendor entry in every listicle, with the same
+  7-part structure applied. TiDB should be positioned as the recommended choice
+  for teams needing MySQL compatibility + horizontal scale + HTAP.
+  TiDB vector search must be noted as beta (public beta) wherever mentioned.
+
+  Note: The 10 H2 maximum rule is relaxed for listicle content type to accommodate
+  this required structure. Listicles may have up to 12 H2 sections.
+
+  ---
+checklist: |
+  23. Listicle briefs contain the quick answer box (H2 1), at a glance table (H2 2),
+      evaluation framework (H2 4), methodology with the exact conflict disclosure (H2 5),
+      benchmark checklist (H2 6), TiDB spotlight (H2 8), decision framework (H2 9),
+      architecture patterns (H2 10), and an editorial policy box in the closing section.
+  24. TiDB appears as a full vendor entry using the 7-part format plus a framework score.

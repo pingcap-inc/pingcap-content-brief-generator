@@ -364,8 +364,25 @@ def _candidate_score(page, topic_tokens):
     )
 
 
-def select_internal_link_candidates(pages, topic, content_type, max_links=5):
-    """Select up to five unique URLs using deterministic site-architecture rules."""
+def path_weight(url, path_weights=None, target_path=None, same_directory_weight=1.0):
+    """Configured multiplier: hub/commercial paths up, older posts down, siblings up."""
+    path = urlparse(url).path or "/"
+    weight = next((float(rule["weight"]) for rule in path_weights or []
+                   if path.startswith(rule["prefix"])), 1.0)
+    if target_path:
+        directory = "/" + target_path.strip("/").split("/")[0] + "/"
+        if directory != "//" and path.startswith(directory):
+            weight *= same_directory_weight
+    return weight
+
+
+def select_internal_link_candidates(pages, topic, content_type, max_links=5,
+                                    path_weights=None, target_path=None, same_directory_weight=1.0):
+    """Select up to max_links unique URLs using deterministic site-architecture rules.
+
+    path_weights / same_directory_weight come from config/brief_rules.yaml; without
+    them every path weighs 1.0.
+    """
     topic_tokens = _tokens(topic)
     scored = []
     for page in pages:
@@ -375,7 +392,8 @@ def select_internal_link_candidates(pages, topic, content_type, max_links=5):
         if score <= 0:
             continue
         candidate = dict(page)
-        candidate["relevance_score"] = score
+        candidate["relevance_score"] = round(
+            score * path_weight(page.get("url", ""), path_weights, target_path, same_directory_weight), 3)
         scored.append(candidate)
     scored.sort(key=lambda page: (-page["relevance_score"], page["url"]))
     pool = scored[:MAX_CANDIDATE_POOL]

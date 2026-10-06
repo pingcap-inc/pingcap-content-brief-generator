@@ -65,13 +65,27 @@ Enable these APIs in your Google Cloud project:
 
 ### 4. Run
 
-python brief.py "TiDB vs PostgreSQL" comparison
-python brief.py "Best databases for real-time analytics" listicle
-python brief.py "AI agent memory persistent state database" solution
+Every run needs a priority link: the page's single primary CTA and a required
+internal link, used verbatim.
+
+```bash
+python brief.py "TiDB Cloud Zero vs Supabase for AI Agent Backends" comparison \
+  --priority-link-url https://www.pingcap.com/ai/ \
+  --priority-link-anchor "distributed SQL database for AI applications"
+```
 
 To supply a keyword for validation, use the separate override flag (confirmation is still required):
 
-python brief.py "TiDB Cloud is the unified database layer for AI agents" solution --primary-keyword-override "AI agent memory"
+```bash
+python brief.py "TiDB Cloud is the unified database layer for AI agents" solution \
+  --primary-keyword-override "AI agent memory" \
+  --priority-link-url https://www.pingcap.com/ai/ --priority-link-anchor "AI database"
+```
+
+Optional: `--required-links links.json`, a list of `{"url", "anchor", "section"}`
+objects. `section` is a template section id (for example `pricing`) or H2 text.
+The priority link and required links must be live, indexable PingCAP pages or the
+run stops before generation.
 
 ## Model configuration
 
@@ -86,17 +100,36 @@ To use OpenAI instead of Anthropic, replace the anthropic client calls in genera
 
 ## Brief quality
 
-The brief prompt enforces:
+Rules, templates and lists live in `config/`, not in code:
 
-- Word count scaled by keyword MSV (N/A → 1,800–2,500 words; 5,000+ → 3,500–4,500 words)
-- AI Overview patterns block grounded in SERP data
-- At a glance comparison table for comparison and listicle types
-- Per-section word count targets
-- Writer guardrails (benchmark sourcing, pricing claims, review verification)
-- Conflict disclosure for PingCAP-published content
-- Up to five verified internal-link recommendations from the PingCAP sitemap
-- Exact H2 placement, suggested anchor text, and a rationale for every link
-- Schema markup recommendations matched to page sections
+| File | Holds |
+|---|---|
+| `config/brief_rules.yaml` | Meta limits, slug prefixes, intent labels, SERP depth, takeaway and FAQ limits, E-E-A-T terms, banned words, word-count tiers, internal-link weights |
+| `config/templates/*.yaml` | Page-type outlines (comparison/alternative, listicle, solution, default): required H2s, order, word weights, guidance |
+| `config/prompts/*.md` | Base instructions and quality checklist, with `{{...}}` placeholders filled from the rules |
+| `config/customer_roster.yaml` | The only customers and URLs a brief may cite |
+| `config/product_facts.yaml` | Product facts the brief is checked against |
+| `config/review_sources.yaml` | Optional, human-verified G2/Capterra/Clutch URLs per competitor |
+
+`brief_quality.py` applies them in three passes:
+
+1. **Deterministic fields.** Code sets the target keyword, search intent, URL slug
+   (from the primary keyword, e.g. `/compare/supabase-alternative`), supporting
+   keywords with MSV, and Total MSV. It drops CTAs whose URLs cannot be verified,
+   replaces empty data sections with a one-line note, deduplicates entities, and
+   marks unmatched customer numbers and sourced competitor prices for verification.
+2. **Checks.** Every rule is a named check: meta title/description lengths counted
+   in code, SERP table (relevant pages from the top 20 only), Key Takeaways, E-E-A-T,
+   template H2s and order, at-a-glance table, Key differences H3s, reviews, pricing,
+   one primary CTA, internal links (priority, required, section relevance), case
+   studies, FAQs, style lint (em dashes, banned words, TiDB superlatives), product
+   facts, TiDB SQL `<=>` misuse (parsed with sqlglot), empty data, word count.
+3. **One repair round.** Failing sections are regenerated once, alone, and spliced
+   back. If anything still fails, the brief is rejected.
+
+Every check is written to `validation.json` with `passed` and `details`, both for
+rejected drafts (`brief_failed_*/`) and successful runs (`brief_run_*/`). Fewer than
+five relevant pages in the top-20 SERP rejects the run before the paid generation call.
 
 ## Internal-link inventory
 
@@ -217,9 +250,11 @@ The first positional argument is the **title / H1 angle**, not the search keywor
 Before the existing 11 steps, Stage 0 resolves and validates a primary keyword:
 
 ```bash
-python3 brief.py "TiDB Cloud Zero vs Supabase for AI Agent Backends" comparison
 python3 brief.py "TiDB Cloud Zero vs Supabase for AI Agent Backends" comparison \
-  --primary-keyword-override "supabase alternative"
+  --priority-link-url https://www.pingcap.com/ai/ --priority-link-anchor "distributed SQL database for AI applications"
+python3 brief.py "TiDB Cloud Zero vs Supabase for AI Agent Backends" comparison \
+  --primary-keyword-override "supabase alternative" \
+  --priority-link-url https://www.pingcap.com/ai/ --priority-link-anchor "distributed SQL database for AI applications"
 ```
 
 Every run opens a local confirmation screen and prints its URL in Terminal.

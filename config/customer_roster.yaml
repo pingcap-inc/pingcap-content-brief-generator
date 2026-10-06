@@ -1,0 +1,20 @@
+# Customers the brief may cite. Only these URLs are allowed for case-study
+# slots; if none fits a slot, the slot is removed. Never anonymize.
+customers:
+  - name: Flipkart
+    url: https://www.pingcap.com/case-study/flipkart-transforming-database-management-and-reducing-complexity-with-tidb/
+  - name: MNC Bank
+    url: https://www.pingcap.com/case-study/mnc-bank-supercharges-performance-with-tidb/
+  - name: Zhihu
+    url: https://www.pingcap.com/blog/from-plan-to-execution-zhihus-guide-to-petabyte-scale-tidb-database-migration/
+  - name: Rakuten
+    url: https://www.pingcap.com/blog/revolutionizing-loyalty-programs-rakuten-distributed-sql/
+  - name: Kimi
+    url: https://www.pingcap.com/case-study/kimi-2-6-agent-hosting-platform-tidb-cloud/
+  - name: Manus
+    url: https://www.pingcap.com/case-study/manus-agentic-ai-database-tidb/
+  - name: Trip.com
+    url: https://www.pingcap.com/case-study/trip-com-boosts-real-time-data-processing-and-financial-settlement-with-tidb/
+
+# Likely to have case studies, but usable only with verified source material.
+unverified_candidates: [Pinterest, Plaid, CardX, Catalyst, WeBank, Tuya, Bolt, Mercari, Dify]
