@@ -132,9 +132,13 @@ def supporting_keywords(resolution, keyword_data=None, semrush_related=None, ent
     coverage = {" ".join(e.casefold().split()) for e in entity_coverage}
     found = {}
     # Rejections remain authoritative even if another provider returns the same term.
-    rejected = {" ".join(r.get("keyword", "").casefold().split())
-                for r in resolution.get("supporting_candidates") or []
+    candidates = resolution.get("supporting_candidates") or []
+    rejected = {" ".join(r.get("keyword", "").casefold().split()) for r in candidates
                 if str(r.get("status", "")).startswith(("discarded", "blocked", "needs writer confirmation"))}
+    # Stage 0 already judged these against the title angle on the live SERP, which is
+    # stronger evidence than shared words, so the lexical check below does not apply.
+    validated = {" ".join(r.get("keyword", "").casefold().split()) for r in candidates
+                 if r.get("status") == "eligible"}
     generic = set(cfg["generic_relevance_tokens"])
     def meaningful(value):
         return {t.rstrip("s") for t in tokens(value)} - generic
@@ -146,8 +150,8 @@ def supporting_keywords(resolution, keyword_data=None, semrush_related=None, ent
         key = " ".join(keyword.casefold().split())
         if key == primary or "?" in key or key in rejected:
             return
-        # Conservative lexical check for unvalidated candidates, not a SERP claim.
-        if key not in coverage and not meaningful(key).intersection(angle_tokens):
+        # Conservative lexical check for terms Stage 0 did not SERP-validate.
+        if key not in coverage and key not in validated and not meaningful(key).intersection(angle_tokens):
             return
         msv = volume(msv)
         row = found.setdefault(key, {"keyword": key, "msv": msv, "source": source})

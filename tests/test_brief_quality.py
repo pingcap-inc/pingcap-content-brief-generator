@@ -168,6 +168,19 @@ class DeterministicTests(unittest.TestCase):
             [{"keyword": "best holiday tools", "search_volume": 80000}])
         self.assertEqual([r["keyword"] for r in rows], ["supabase authentication"])
 
+    def test_stage0_validated_terms_skip_the_lexical_check(self):
+        res = resolution()
+        res["supporting_candidates"] = [
+            {"keyword": "postgres alternative", "msv": 900, "status": "eligible"},
+            {"keyword": "serverless database", "msv": 700, "status": "not SERP-validated"},
+            {"keyword": "best vacation alternatives", "msv": 90000, "status": "not SERP-validated"}]
+        rows = bq.supporting_keywords(res, [{"keyword": "Postgres Alternative", "search_volume": 1200},
+                                            {"keyword": "best holiday tools", "search_volume": 80000}])
+        self.assertEqual([(r["keyword"], r["msv"]) for r in rows], [("postgres alternative", 1200)],
+                         "eligible kept (other sources may update its volume); unvalidated unrelated terms dropped")
+        res["supporting_candidates"][0]["status"] = "blocked: insufficient relevant pages"
+        self.assertEqual(bq.supporting_keywords(res), [], "rejection still wins over eligibility elsewhere")
+
     def test_unknown_entity_volume_stays_unavailable_and_is_not_totaled(self):
         ctx = context()
         ctx["keyword_data"] = [{"keyword": "agent backend scaffolding", "search_volume": None}]
