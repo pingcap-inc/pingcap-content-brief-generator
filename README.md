@@ -325,8 +325,9 @@ Tests mock paid providers; they do not make live API calls.
 ### Supporting keyword safeguards and regression checks
 
 Rejected Stage 0 terms stay excluded from the final supporting-keyword list, even
-if DataForSEO or SEMrush returns them again. Other terms must share a meaningful
-word with the title/primary keyword or be explicitly tagged for entity coverage.
+if DataForSEO or SEMrush returns them again. Terms Stage 0 validated against the
+SERP (status `eligible`) are kept. Other terms must share a meaningful word with the
+title/primary keyword or be explicitly tagged for entity coverage.
 Generic words such as “best” and “alternative” do not establish relevance. This
 is a conservative lexical filter, not a semantic or SERP validation of every
 supporting term; reviewers should still check the final list.
