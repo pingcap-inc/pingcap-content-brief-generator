@@ -14,6 +14,11 @@ ENTITIES = {'product':'TiDB Cloud Zero','competitor':'Supabase','category':'AI a
             'head_entity':'Supabase','category_variants':['AI agent backends','agent backend platforms'],
             'parent_terms':['backend platform','serverless database']}
 
+MARIADB_ENTITIES = {'product':'TiDB','competitor':'MariaDB','category':'relational database',
+                   'entity':'','task':'compare relational databases','use_case':'database selection',
+                   'head_entity':'MariaDB','category_variants':['relational databases','SQL database'],
+                   'parent_terms':['database','database management system']}
+
 
 class FixtureAPI:
     def __init__(self):
@@ -271,6 +276,75 @@ class ResolutionContractTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.TestCase):
+    def test_absent_entity_uses_category_without_changing_brands(self):
+        api=ResearchAPI(load_config(),Mock(),'login','password',Mock(),'test',session=Mock())
+        for value in ['', '  ', None, KeyError]:
+            with self.subTest(entity=value):
+                raw={**MARIADB_ENTITIES,'entity':value,'category':' relational database '}
+                if value is KeyError:del raw['entity']
+                api.judge=Mock(return_value=raw)
+                result=api.extract('TiDB vs. MariaDB')
+                self.assertEqual(result['entity'],'relational database')
+                self.assertEqual((result['product'],result['competitor'],result['head_entity']),
+                                 ('TiDB','MariaDB','MariaDB'))
+                self.assertIsNot(result,raw)
+                self.assertEqual(raw.get('entity'),None if value is KeyError else value)
+
+    def test_explicit_entity_is_preserved(self):
+        api=ResearchAPI(load_config(),Mock(),'login','password',Mock(),'test',session=Mock())
+        api.judge=Mock(return_value=ENTITIES)
+        self.assertEqual(api.extract(TITLE),ENTITIES)
+        rows=generate_candidates(api.extract(TITLE),'blog',load_config())
+        self.assertIn('what is ai agent backend',rows)
+
+    def test_malformed_extraction_still_blocks(self):
+        api=ResearchAPI(load_config(),Mock(),'login','password',Mock(),'test',session=Mock())
+        cases=[({'entity':[]},'entity'),({'entity':123},'entity'),({'entity':False},'entity'),
+               ({'category':'','entity':''},'category, entity'),({'category':None},'category'),
+               ({'task':''},'task'),({'use_case':''},'use_case'),({'head_entity':None},'head_entity'),
+               ({'product':None},'product'),({'competitor':[]},'competitor'),
+               ({'category_variants':['database']},'category_variants'),
+               ({'parent_terms':['database','']},'parent_terms')]
+        for change,field in cases:
+            with self.subTest(change=change):
+                api.judge=Mock(return_value={**MARIADB_ENTITIES,**change})
+                with self.assertRaisesRegex(ProviderError,field):api.extract('TiDB vs. MariaDB')
+
+    def test_extraction_validated_before_cache_and_retry_succeeds(self):
+        with tempfile.TemporaryDirectory() as d:
+            client=Mock()
+            def response(data):
+                return Mock(stop_reason='end_turn',content=[Mock(type='text',text=json.dumps(data))])
+            client.messages.create.side_effect=[response({**MARIADB_ENTITIES,'category':''}),
+                                                response(MARIADB_ENTITIES)]
+            api=ResearchAPI(load_config(),Cache(d),'login','password',client,'test',session=Mock())
+            with self.assertRaisesRegex(ProviderError,'category, entity'):api.extract('TiDB vs. MariaDB')
+            self.assertEqual(list(Path(d).glob('*.json')),[])
+            result=api.extract('TiDB vs. MariaDB')
+            self.assertEqual(result['entity'],'relational database')
+            self.assertEqual(api.extract('TiDB vs. MariaDB'),result)
+            self.assertEqual(client.messages.create.call_count,2)
+            saved=json.loads(next(Path(d).glob('*.json')).read_text())
+            self.assertEqual(saved['value']['entity'],'relational database')
+
+    def test_cached_extraction_is_revalidated(self):
+        api=ResearchAPI(load_config(),Mock(),'login','password',Mock(),'test',session=Mock())
+        api.cache.get.return_value={**MARIADB_ENTITIES,'entity':[]}
+        with self.assertRaisesRegex(ProviderError,'entity'):api.extract('TiDB vs. MariaDB')
+        api.client.messages.create.assert_not_called()
+        api.cache.put.assert_not_called()
+
+    def test_short_comparison_resolves_with_empty_entity(self):
+        api=ResearchAPI(load_config(),Mock(),'login','password',Mock(),'test',session=Mock())
+        api.judge=Mock(return_value=dict(MARIADB_ENTITIES))
+        fixture=FixtureAPI()
+        fixture.extract=api.extract
+        proposal=Resolver(fixture,load_config()).resolve('TiDB vs. MariaDB','comparison')
+        self.assertEqual(proposal['title_angle'],'TiDB vs. MariaDB')
+        self.assertIn('tidb vs mariadb',fixture.metrics_calls[0])
+        self.assertIn('mariadb alternative',fixture.metrics_calls[0])
+        self.assertGreaterEqual(len(fixture.metrics_calls[0]),10)
+
     def test_cache_expires_and_is_per_keyword(self):
         with tempfile.TemporaryDirectory() as d:
             now=[100]
