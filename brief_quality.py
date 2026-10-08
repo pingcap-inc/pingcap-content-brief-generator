@@ -131,12 +131,23 @@ def supporting_keywords(resolution, keyword_data=None, semrush_related=None, ent
     primary = " ".join(resolution["primary_keyword"].casefold().split())
     coverage = {" ".join(e.casefold().split()) for e in entity_coverage}
     found = {}
+    # Rejections remain authoritative even if another provider returns the same term.
+    rejected = {" ".join(r.get("keyword", "").casefold().split())
+                for r in resolution.get("supporting_candidates") or []
+                if str(r.get("status", "")).startswith(("discarded", "blocked", "needs writer confirmation"))}
+    generic = set(cfg["generic_relevance_tokens"])
+    def meaningful(value):
+        return {t.rstrip("s") for t in tokens(value)} - generic
+    angle_tokens = meaningful(resolution.get("title_angle", "") + " " + primary)
 
     def add(keyword, msv, source):
         if not isinstance(keyword, str) or not keyword.strip():
             return
         key = " ".join(keyword.casefold().split())
-        if key == primary or "?" in key:
+        if key == primary or "?" in key or key in rejected:
+            return
+        # Conservative lexical check for unvalidated candidates, not a SERP claim.
+        if key not in coverage and not meaningful(key).intersection(angle_tokens):
             return
         msv = volume(msv)
         row = found.setdefault(key, {"keyword": key, "msv": msv, "source": source})
@@ -153,7 +164,7 @@ def supporting_keywords(resolution, keyword_data=None, semrush_related=None, ent
     measured = sorted(({**r, "entity_coverage": False} for r in found.values() if r["msv"]),
                       key=lambda r: (-r["msv"], r["keyword"]))
     # Tagged entity-coverage terms are kept even at zero volume; they reserve room in the cap.
-    covered = sorted(({**r, "msv": r["msv"] or 0, "entity_coverage": True} for r in found.values()
+    covered = sorted(({**r, "entity_coverage": True} for r in found.values()
                       if not r["msv"] and r["keyword"] in coverage), key=lambda r: r["keyword"])
     covered = covered[:cfg["max_keywords"]]
     return measured[:cfg["max_keywords"] - len(covered)] + covered
@@ -429,14 +440,15 @@ def apply_deterministic(content, ctx):
     supporting = supporting_keywords(resolution, ctx.get("keyword_data"), ctx.get("semrush_related"), coverage)
     ctx["supporting"] = supporting
     cell = "<br>".join(
-        f"{r['keyword']} (MSV {r['msv']:,}{', ' + cfg['supporting_keywords']['entity_coverage_tag'] if r['entity_coverage'] else ''})"
+        f"{r['keyword']} (MSV {format(r['msv'], ',') if r['msv'] is not None else 'unavailable'}{', ' + cfg['supporting_keywords']['entity_coverage_tag'] if r['entity_coverage'] else ''})"
         for r in supporting) or "No measured supporting keywords returned"
-    total = resolution["primary_metrics"]["msv"] + sum(r["msv"] for r in supporting)
+    total = resolution["primary_metrics"]["msv"] + sum(r["msv"] for r in supporting if r["msv"] is not None)
+    total_note = "; unavailable volumes excluded" if any(r["msv"] is None for r in supporting) else ""
     for label, value, after in [
             ("Target Keyword", primary, None),
             ("Search Intent", intent_label(resolution["search_intent"]), "Target Keyword"),
             ("Supporting Keywords", cell, "Search Intent"),
-            ("Total MSV", f"{total:,} (primary {resolution['primary_metrics']['msv']:,} + supporting)", "Supporting Keywords"),
+            ("Total MSV", f"{total:,} (primary {resolution['primary_metrics']['msv']:,} + supporting{total_note})", "Supporting Keywords"),
             ("URL Structure", page_url(ctx["content_type"], primary), "Meta Description")]:
         content = _set_meta_row(content, label, value, after)
 
@@ -594,7 +606,7 @@ def run_checks(content, ctx, structural_errors=()):
     # 2. Supporting keywords.
     supporting = ctx.get("supporting", [])
     cell = split_cell(meta.get("Supporting Keywords", ""))
-    problems = [f"Missing MSV: {item}" for item in cell if not re.search(r"\(MSV [\d,]+", item)
+    problems = [f"Missing MSV: {item}" for item in cell if not re.search(r"\(MSV (?:[\d,]+|unavailable)", item)
                 and item != "No measured supporting keywords returned"]
     problems += [f"Zero-volume keyword without entity coverage: {r['keyword']}"
                  for r in supporting if not r["msv"] and not r["entity_coverage"]]

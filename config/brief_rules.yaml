@@ -24,6 +24,8 @@ search_intent_labels:
 supporting_keywords:
   max_keywords: 15
   entity_coverage_tag: entity coverage
+  # Stemmed generic words cannot establish topical relevance by themselves.
+  generic_relevance_tokens: [alternative, competitor, comparison, best, top, tool, platform, product, guide, explained, tutorial, practice, example, benefit, overview, pricing, free, software, solution, service]
 
 serp:
   depth: 20

@@ -321,3 +321,26 @@ rules unchanged: Stage 0 adds keyword selection and audit metadata only.
 Run all tests with `python3 -m unittest discover -s tests -v`. The browser-script
 unit test additionally uses Node if installed (otherwise it is explicitly skipped).
 Tests mock paid providers; they do not make live API calls.
+
+### Supporting keyword safeguards and regression checks
+
+Rejected Stage 0 terms stay excluded from the final supporting-keyword list, even
+if DataForSEO or SEMrush returns them again. Other terms must share a meaningful
+word with the title/primary keyword or be explicitly tagged for entity coverage.
+Generic words such as “best” and “alternative” do not establish relevance. This
+is a conservative lexical filter, not a semantic or SERP validation of every
+supporting term; reviewers should still check the final list.
+
+Unknown entity-coverage volume stays **MSV unavailable**. Only measured values
+contribute to Total MSV; measured zero remains zero. Candidates remain available
+in the resolution audit even when excluded from the final supporting list.
+
+Acknowledging a weak override does not bypass the final generation gate: the
+expanded top-20 SERP must still contain at least five relevant pages. The
+confirmation screen displays these limits from the same quality configuration
+used by generation.
+
+The **Python regression tests** workflow runs the Python and Node-backed UI tests
+on pull requests and pushes to main without API credentials. To require a passing
+check before merging, a repository administrator must add this job to the branch
+protection rules or ruleset.
