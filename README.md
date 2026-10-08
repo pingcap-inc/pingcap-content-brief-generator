@@ -278,6 +278,13 @@ up to three choices. These are relevance judgments, not full-page factual checks
 The chosen snapshot is reused in Step 2. All unselected candidates travel with the
 research, marked as scored, unvalidated, or discarded as appropriate.
 
+For short comparison titles such as `TiDB vs. MariaDB`, `entity` means the main
+topic for explainer queries. If the model omits it or returns null or blank text,
+Stage 0 uses the nonempty extracted `category`. Product, competitor and
+`head_entity` stay as extracted. Other missing required fields and malformed
+values still block the run. Extraction responses are validated before caching;
+the revised prompt uses a new cache key, so older responses are not reused.
+
 Configure patterns, weights and thresholds in `config/keyword_resolver.json`, or
 supply a complete replacement with `--keyword-config path/to/config.json`.
 Defaults: MSV >=50, at least five relevant organic results, US location 2840,

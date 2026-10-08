@@ -139,7 +139,7 @@ class ResearchAPI:
             self.cache.put(key, value)
         return value
 
-    def judge(self, task, data):
+    def judge(self, task, data, validator=None):
         def request():
             try:
                 message = self.client.messages.create(model=self.model, max_tokens=4000,
@@ -150,18 +150,43 @@ class ResearchAPI:
                 raw = '\n'.join(b.text for b in message.content if b.type == 'text').strip()
                 if raw.startswith('```'):
                     raw = raw.split('\n',1)[1].rsplit('```',1)[0]
-                return json.loads(raw)
+                parsed = json.loads(raw)
+                # Validate before caching so unusable extractions do not poison retries.
+                return validator(parsed) if validator else parsed
             except ResolutionError:
                 raise
             except Exception as exc:
                 raise ProviderError(f'Stage 0 LLM judgment failed ({type(exc).__name__}).') from exc
-        return self.cached('judgment', [self.model, task, data], request)
+        result = self.cached('judgment', [self.model, task, data], request)
+        # Cache hits must satisfy the same contract as fresh provider responses.
+        return validator(result) if validator else result
 
     def extract(self, title):
-        data = self.judge('Extract entities from the title. Return an object with product, competitor, category, entity, task, use_case, head_entity (strings), category_variants (2 to 4 natural singular/plural or category phrasings), and parent_terms (2 to 4 broader but relevant category terms). Keep product and competitor distinct; use empty strings for absent brand names rather than inventing them. Prefer the competitor as head_entity for a versus title. Do not infer search volume.', {'title':title})
+        task = ('Extract entities from the title. Return an object with product, competitor, category, entity, task, use_case, head_entity (strings), '
+                'category_variants (2 to 4 natural singular/plural or category phrasings), and parent_terms (2 to 4 broader but relevant category terms). '
+                'Keep product and competitor distinct; use empty strings for absent brand names rather than inventing them. '
+                'All other string fields must be nonempty. category is the shared topical category. '
+                'entity is the main topic or concept for explainer queries; use category when the title names only products. '
+                'task is a natural action phrase; use_case is the purpose supported by the title. '
+                'For a bare comparison, use comparing the named products as task and category selection as use_case. '
+                'Prefer the competitor as head_entity for a versus title. '
+                'For "TiDB vs. MariaDB", product="TiDB", competitor="MariaDB", category="relational database", '
+                'entity="relational database", task="compare TiDB and MariaDB", use_case="relational database selection", head_entity="MariaDB". '
+                'Do not infer search volume.')
+        data = self.judge(task, {'title':title}, validator=self._normalize_entities)
+        return self._normalize_entities(data)
+
+    @staticmethod
+    def _normalize_entities(data):
+        """Recover only an absent topic from an extracted category; reject other defects."""
         keys = ['category','entity','task','use_case','head_entity']
         if not isinstance(data,dict):
             raise ProviderError('Entity extraction did not return a JSON object.')
+        data = dict(data)
+        entity = data.get('entity')
+        category = data.get('category')
+        if (entity is None or isinstance(entity,str) and not entity.strip()) and isinstance(category,str) and category.strip():
+            data['entity'] = category.strip()
         missing = [k for k in keys if not isinstance(data.get(k),str) or not data[k].strip()]
         if missing:
             raise ProviderError('Entity extraction returned empty or missing fields: '+', '.join(missing))
