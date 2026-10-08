@@ -13,6 +13,7 @@ HTML = r'''<!doctype html><html lang="en"><meta charset="utf-8"><title>Confirm p
 <p id="reason"></p><div id="comparison"></div><table><thead><tr><th>Select</th><th>Keyword</th><th>Monthly searches</th><th>Content-type match</th><th>Already ranking</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table>
 <section id="serpPanel"><h2>Top 10 results for this keyword</h2><p><span id="serpSummary"></span> <a id="google" target="_blank" rel="noopener noreferrer">View live on Google</a></p>
 <table><thead><tr><th>Rank</th><th>Title</th><th>Domain</th><th>Page type</th><th>Relevance</th><th>Flags</th></tr></thead><tbody id="serp"></tbody></table></section>
+<p id="generationGate">Confirmation does not bypass the final evidence check: before writing, the generator requires at least {{generation_minimum}} relevant pages in the top {{generation_depth}} results, including for overrides. If that check fails, no brief is generated.</p>
 <p id="source"></p><div id="warnings"></div><label id="ackLabel" hidden><input type="checkbox" id="ack"> I've reviewed these results and this keyword still fits my article.</label>
 <p><label>Your name <input type="text" id="name" autocomplete="name" required></label></p>
 <p><label>Override keyword <input type="text" id="override" maxlength="100"></label> <button id="validate">Validate override</button></p>
@@ -48,6 +49,13 @@ fetch('/'+token+'/state').then(r=>r.json()).then(v=>{state=v;el('override').valu
 </script></html>'''
 
 
+def confirmation_html():
+    from brief_quality import rules
+    gate = rules()["serp"]
+    return HTML.replace("{{generation_minimum}}", str(gate["min_relevant_pages"])).replace(
+        "{{generation_depth}}", str(gate["depth"]))
+
+
 def confirmation_screen(resolver, proposal, open_browser=webbrowser.open):
     """Serve only on loopback, with an unguessable per-run token. No auto-confirm."""
     token = secrets.token_urlsafe(32)
@@ -78,7 +86,7 @@ def confirmation_screen(resolver, proposal, open_browser=webbrowser.open):
             if not self.allowed():
                 return self.send(403,{'error':'Forbidden'})
             if self.path=='/'+token:
-                return self.send(200,HTML,True)
+                return self.send(200,confirmation_html(),True)
             if self.path=='/'+token+'/state':
                 return self.send(200,current['proposal'])
             self.send(404,{'error':'Not found'})

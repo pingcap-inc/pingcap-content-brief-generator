@@ -149,6 +149,40 @@ class DeterministicTests(unittest.TestCase):
         total = bq.meta_cells(out)["Total MSV"]
         self.assertTrue(total.startswith(f"{5000 + sum(r['msv'] for r in ctx['supporting']):,}"))
 
+    def test_rejected_terms_cannot_reenter_from_other_sources(self):
+        res = resolution()
+        for status in ("blocked: insufficient relevant pages", "discarded: unrelated brand", "needs writer confirmation"):
+            res["supporting_candidates"] = [{"keyword": "supabase unrelated", "msv": 90000, "status": status}]
+            rows = bq.supporting_keywords(res,
+                [{"keyword": "Supabase Unrelated", "search_volume": 90000}],
+                [{"keyword": "supabase unrelated", "search_volume": 90000}],
+                ["supabase unrelated"])
+            self.assertEqual(rows, [], status)
+
+    def test_unvalidated_terms_need_topical_overlap(self):
+        res = resolution()
+        res["supporting_candidates"] = [
+            {"keyword": "best vacation alternatives", "msv": 90000, "status": "not SERP-validated"},
+            {"keyword": "supabase authentication", "msv": 500, "status": "not SERP-validated"}]
+        rows = bq.supporting_keywords(res,
+            [{"keyword": "best holiday tools", "search_volume": 80000}])
+        self.assertEqual([r["keyword"] for r in rows], ["supabase authentication"])
+
+    def test_unknown_entity_volume_stays_unavailable_and_is_not_totaled(self):
+        ctx = context()
+        ctx["keyword_data"] = [{"keyword": "agent backend scaffolding", "search_volume": None}]
+        ctx["semrush_related"] = []
+        ctx["resolution"]["supporting_candidates"] = []
+        out, _ = bq.apply_deterministic(FIXTURE, ctx)
+        row = next(r for r in ctx["supporting"] if r["keyword"] == "agent backend scaffolding")
+        self.assertIsNone(row["msv"])
+        meta = bq.meta_cells(out)
+        self.assertIn("agent backend scaffolding (MSV unavailable, entity coverage)", meta["Supporting Keywords"])
+        self.assertIn("5,000", meta["Total MSV"])
+        self.assertIn("unavailable volumes excluded", meta["Total MSV"])
+        check = next(c for c in bq.run_checks(out, ctx) if c["id"] == "supporting_keywords")
+        self.assertTrue(check["passed"], check)
+
     def test_entities_deduplicated(self):
         out, _, notes = finished()
         entities = [e[0] for e in bq.entity_list(out)]

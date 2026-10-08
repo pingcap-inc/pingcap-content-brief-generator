@@ -24,6 +24,15 @@ from test_keyword_resolver import FixtureAPI, TITLE
 
 
 class ConfirmationTests(unittest.TestCase):
+    def test_generation_gate_notice_uses_current_quality_config(self):
+        from keyword_confirmation import confirmation_html
+        with patch('brief_quality.rules', return_value={"serp":{"min_relevant_pages":7,"depth":30}}):
+            html = confirmation_html()
+        self.assertIn('at least 7 relevant pages in the top 30 results', html)
+        self.assertIn('including for overrides', html)
+        self.assertIn('no brief is generated', html)
+        self.assertNotIn('{{generation_', html)
+
     def test_warning_cannot_be_bypassed_over_http_and_override_keeps_candidates(self):
         api = FixtureAPI(); api.rank = True
         resolver = Resolver(api, load_config())
