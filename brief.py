@@ -1127,13 +1127,16 @@ def validate_brief(content, content_type, candidates, plan, ctx=None, existing_p
 
 def _save_failed_brief(text, research_block, report):
     """Preserve paid output and research; a unique directory keeps earlier failures."""
-    draft_dir = tempfile.mkdtemp(prefix="brief_failed_", dir=os.getcwd())
+    import brief_quality
+    # Failed drafts live in the run's own folder ("<title> [<type>] vN" under briefs/).
+    draft_dir = report.get("run_dir") or brief_quality.run_folder(
+        report.get("topic") or "brief", report.get("content_type") or "brief", os.path.join(os.getcwd(), "briefs"))
     draft_path = os.path.join(draft_dir, "draft.md")
     with open(draft_path, "w", encoding="utf-8") as handle:
         handle.write("<!-- UNVALIDATED DRAFT: not approved for publication. "
                      "See validation.json. -->\n\n" + text)
     print(f"           Unvalidated draft saved: {draft_path}")
-    report_path = os.path.join(draft_dir, "validation.json")
+    report_path = os.path.join(draft_dir, "quality_report.json")
     with open(report_path, "w", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2, ensure_ascii=False)
     with open(os.path.join(draft_dir, "research.md"), "w", encoding="utf-8") as handle:
@@ -2119,7 +2122,9 @@ def main():
         sys.exit(1)
     search_keyword = keyword_resolution['primary_keyword']
     # Save confirmation immediately so later provider/export errors cannot lose it.
-    audit_dir = tempfile.mkdtemp(prefix='brief_run_', dir=os.getcwd())
+    # One readable folder per run: briefs/<title> [<type>] v1, v2, ...
+    audit_dir = brief_quality.run_folder(topic, content_type, os.path.join(os.getcwd(), 'briefs'))
+    print(f"           Run folder: {audit_dir}")
     audit_path = os.path.join(audit_dir, 'validation.json')
     with open(audit_path, 'w', encoding='utf-8') as handle:
         json.dump({'status':'keyword_confirmed', 'keyword_resolution':keyword_resolution},
@@ -2393,7 +2398,7 @@ def main():
                        "competitor": entities.get("competitor") or None,
                        "serp_source_keyword": serp_features["source_keyword"],
                        "existing_page": existing_page}
-    quality_report = {}
+    quality_report = {"run_dir": audit_dir}
     try:
         brief = generate_brief(
             topic,

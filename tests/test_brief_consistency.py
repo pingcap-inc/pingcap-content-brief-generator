@@ -138,7 +138,7 @@ class OutputTests(unittest.TestCase):
             ns['os'] = Mock(getenv=lambda key: None, getcwd=lambda: folder, path=os.path)
             with self.assertRaisesRegex(ValueError,'incomplete'):
                 ns['generate_brief']('scaling','blog',SEED,[],[],[])
-            drafts = list(Path(folder).glob('brief_failed_*/draft.md'))
+            drafts = list(Path(folder).glob('briefs/*/draft.md'))
             self.assertEqual(len(drafts), 1)
             self.assertIn('Partial output', drafts[0].read_text())
     def test_complete_generation_and_title(self):

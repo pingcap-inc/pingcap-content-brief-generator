@@ -209,7 +209,7 @@ class PipelineTests(unittest.TestCase):
             old=os.getcwd()
             try:
                 os.chdir(d); ns['main']()
-                report=json.loads(next(Path(d).glob('brief_run_*/validation.json')).read_text())
+                report=json.loads(next(Path(d).glob('briefs/*/validation.json')).read_text())
             finally: os.chdir(old)
         self.assertEqual([e[0] for e in events],['confirmed','research'])
         for name in ['get_llm_mentions','get_semrush_keyword_intent','get_semrush_related_keywords','get_semrush_keyword_gap']:

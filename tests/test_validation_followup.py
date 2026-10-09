@@ -432,3 +432,22 @@ class MariaDBComparisonRerunTests(unittest.TestCase):
         self.assertNotIn('verify URL',out)
         self.assertIn("Removed 'verify URL' placeholder notes",notes)
         self.assertNotIn('primary_cta',failing(out,ctx))
+
+
+class RunFolderTests(unittest.TestCase):
+    """Local folders are named "<title> [<type>] vN" so runs are easy to find."""
+
+    def test_versions_increment_per_title_and_type(self):
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as root:
+            a=bq.run_folder('TiDB vs. MariaDB','comparison',root)
+            b=bq.run_folder('TiDB vs. MariaDB','comparison',root)
+            c=bq.run_folder('TiDB vs. MariaDB','blog',root)
+            self.assertEqual([os.path.basename(p) for p in (a,b,c)],
+                             ['TiDB vs. MariaDB [comparison] v1','TiDB vs. MariaDB [comparison] v2','TiDB vs. MariaDB [blog] v1'])
+
+    def test_unsafe_characters_are_replaced(self):
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as root:
+            path=bq.run_folder('CI/CD: Why? "Databases" break','blog',root)
+            self.assertEqual(os.path.basename(path),'CI CD Why Databases break [blog] v1')

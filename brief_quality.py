@@ -6,6 +6,7 @@ be computed (slug, target keyword, intent, supporting keywords, Total MSV, empty
 notes, CTA pruning, claim markers) is set here and then checked like everything else.
 """
 import json
+import os
 import re
 from html.parser import HTMLParser
 from functools import lru_cache
@@ -93,6 +94,23 @@ def slugify(keyword):
 def page_url(content_type, keyword):
     prefixes = rules()["meta"]["slug_prefixes"]
     return prefixes.get(content_type, prefixes["default"]) + slugify(keyword)
+
+
+def run_folder(title, content_type, root):
+    """A readable, versioned local folder per run: "<title> [<type>] v<n>" under root."""
+    os.makedirs(root, exist_ok=True)
+    safe = " ".join(re.sub(r'[\\/:*?"<>|]+', " ", title).split())[:80] or "Untitled"
+    base = f"{safe} [{content_type}]"
+    taken = [int(m.group(1)) for name in os.listdir(root)
+             if (m := re.fullmatch(re.escape(base) + r" v(\d+)", name))]
+    version = max(taken, default=0) + 1
+    while True:
+        path = os.path.join(root, f"{base} v{version}")
+        try:
+            os.makedirs(path)
+            return path
+        except FileExistsError:
+            version += 1
 
 
 def target_url(ctx, keyword):

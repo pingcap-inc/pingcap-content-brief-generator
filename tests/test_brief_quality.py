@@ -462,7 +462,7 @@ class RegressionFixtureTests(unittest.TestCase):
             report=self.report)
 
     def saved_report(self):
-        return json.loads(next(Path(self.folder).glob("brief_failed_*/validation.json")).read_text())
+        return json.loads(next(Path(self.folder).glob("briefs/*/quality_report.json")).read_text())
 
     def test_first_draft_violations_are_repaired_once_and_fixture_assertions_hold(self):
         bad = (FIXTURE
