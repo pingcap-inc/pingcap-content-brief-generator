@@ -312,7 +312,7 @@ confirmed only after the acknowledgment is ticked. The brief header and
 `validation.json` record `override_below_threshold` and the failed checks. A
 blank or over-long override, or one with no DataForSEO volume/difficulty, shows
 an inline error; the existing options stay usable. Provider failures (DataForSEO,
-SEMrush or the LLM failing or returning unusable data) still end the run; no
+the LLM failing or returning unusable data) still end the run; no
 brief-generation call is made. Successful Stage 0 responses are cached in `.keyword_cache/` beside the
 script for 24 hours. Delete that directory to refresh research early. Cache and
 run-output directories are ignored by Git. Paid API calls still occur on misses.
@@ -352,3 +352,25 @@ The **Python regression tests** workflow runs the Python and Node-backed UI test
 on pull requests and pushes to main without API credentials. To require a passing
 check before merging, a repository administrator must add this job to the branch
 protection rules or ruleset.
+
+
+## Review updates
+
+SEMrush is optional. Leave SEMRUSH_API_KEY empty to skip it. A failed SEMrush
+request produces a sanitized warning and does not stop DataForSEO research.
+The generator loads .env beside brief.py explicitly. Required quality-check
+dependencies are checked before paid research begins.
+
+An explicit comparison keyword must use the products named in the article title.
+The expanded SERP evidence gate runs immediately after Step 2. Its failure saves
+the actual result judgments in the run's validation.json and stops later research.
+The five-page minimum remains a configured editorial rule.
+
+Only files in docs/examples/ and root files named example_* or sample_* are
+loaded as reference briefs. The README and generated briefs are excluded.
+Place reviewed reference briefs in docs/examples/ to use them as examples.
+
+Validated Markdown is saved inside a unique brief_run_* directory so rerunning
+the same title does not overwrite earlier output. A validated status means the
+automated checks passed. Human editorial and source verification is still needed.
+Drafts and research are preserved if validation or a repair request fails.

@@ -10,7 +10,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from html.parser import HTMLParser
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from xml.etree import ElementTree
 
 DEFAULT_SITEMAP_URL = "https://www.pingcap.com/sitemap_index.xml"
@@ -112,12 +112,22 @@ def _get_response(url, timeout=30):
     host = parsed.netloc.lower().split(":", 1)[0]
     if parsed.scheme not in {"http", "https"} or host not in ALLOWED_HOSTS:
         raise ValueError(f"Refusing non-PingCAP URL: {url}")
-    response = requests.get(
-        url,
-        headers={"User-Agent": "PingCAP-Content-Brief-Generator/1.0"},
-        timeout=timeout,
-        allow_redirects=True,
-    )
+    current = url
+    for _ in range(10):
+        parsed = urlparse(current)
+        if parsed.scheme not in {'http','https'} or parsed.hostname not in ALLOWED_HOSTS or parsed.username or parsed.password:
+            raise ValueError('Redirect or URL left the allowed PingCAP hosts.')
+        response = requests.get(
+            current, headers={"User-Agent": "PingCAP-Content-Brief-Generator/1.0"},
+            timeout=timeout, allow_redirects=False)
+        if response.status_code not in (301,302,303,307,308):
+            break
+        location = response.headers.get('Location')
+        if not location:
+            raise ValueError('Redirect has no Location header.')
+        current = urljoin(current,location)
+    else:
+        raise ValueError('Too many PingCAP redirects.')
     response.raise_for_status()
     if response.status_code != 200:
         raise ValueError(f"Expected HTTP 200 from {url}, got {response.status_code}")
@@ -254,6 +264,7 @@ def _fetch_page_metadata(page):
         if re.search(r"\b404\b|page not found|not found", page_label):
             raise ValueError("Page appears to be a soft 404")
         if parser.canonical_url:
+            parser.canonical_url = urljoin(final_url,parser.canonical_url)
             canonical = urlparse(parser.canonical_url)
             canonical_host = canonical.netloc.lower().split(":", 1)[0]
             if canonical.scheme not in {"http", "https"} or canonical_host not in ALLOWED_HOSTS:
@@ -267,7 +278,7 @@ def _fetch_page_metadata(page):
         enriched["is_live"] = True
         enriched["indexable"] = True
         enriched["last_checked"] = datetime.now(timezone.utc).isoformat()
-        enriched["title"] = parser.title or enriched["title"]
+        enriched["title"] = parser.title or enriched.get("title", "")
         enriched["h1"] = parser.h1
         enriched["meta_description"] = parser.meta_description
         enriched["primary_keyword"] = parser.primary_keyword
@@ -336,7 +347,11 @@ def load_internal_link_inventory(
     try:
         with open(inventory_path, encoding="utf-8") as handle:
             inventory = json.load(handle)
-        pages = inventory.get("pages", [])
+        pages = inventory.get("pages", []) if isinstance(inventory,dict) else []
+        if isinstance(pages,list):
+            pages = [p for p in pages if isinstance(p,dict) and isinstance(p.get('url'),str) and is_eligible_url(p['url'])]
+        else:
+            pages = []
         if pages:
             return pages, "cached"
     except (OSError, ValueError, TypeError):
@@ -401,6 +416,8 @@ def select_internal_link_candidates(pages, topic, content_type, max_links=5,
     selected_urls = set()
 
     def choose(page_type, rule, limit=1):
+        if len(selected) >= max_links:
+            return
         count = 0
         for page in pool:
             if page.get("page_type") != page_type or page["url"] in selected_urls:

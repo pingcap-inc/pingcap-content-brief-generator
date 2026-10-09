@@ -18,7 +18,7 @@ HTML = r'''<!doctype html><html lang="en"><meta charset="utf-8"><title>Confirm p
 <p><label>Your name <input type="text" id="name" autocomplete="name" required></label></p>
 <p><label>Override keyword <input type="text" id="override" maxlength="100"></label> <button id="validate">Validate override</button></p>
 <p id="error" role="alert"></p><button id="confirm" disabled>Confirm keyword (Enter)</button><button id="cancel">Cancel run</button>
-<p>Up/Down or Left/Right changes selection. An override must be validated before confirmation. API failures block the run.</p>
+<p>Up/Down or Left/Right changes selection. An override must be validated before confirmation. Required research failures block the run. Optional SEMrush failures produce a warning.</p>
 <script>
 const token=location.pathname.slice(1);let state=null,selected=0,busy=false,ended=false;
 const el=id=>document.getElementById(id);
