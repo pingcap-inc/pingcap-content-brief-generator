@@ -637,6 +637,26 @@ def _replace_body(content, name, text):
 _TARGET = re.compile(r"(?mi)^\W*Target\W*:?\W*~?\s*([0-9][0-9,]*)\s*(?:[–-]\s*~?([0-9][0-9,]*))?")
 
 
+def _add_mechanism_tie_back(content, template):
+    """The mechanism H2 must point the writer back to the intro's problem; add the
+    instruction when the model's guidance does not already say so."""
+    cfg = rules()["mechanism_tie_back"]
+    parts = outline_parts(content)
+    index = match_template_sections([t for t, *_ in parts["h2s"]], template).get(template.get("mechanism_section"))
+    if index is None:
+        return content, []
+    _, start, end = parts["h2s"][index]
+    block = content[start:end]
+    sub = re.search(r"(?m)^#{3,}\s", block)
+    own = block[:sub.start()] if sub else block
+    if re.search(cfg["pattern"], own):
+        return content, []
+    bullets = list(re.finditer(r"(?m)^[ \t]*[-*][ \t]+\S.*$", own))
+    at = start + (bullets[-1].end() if bullets else len(own.rstrip()))
+    content = content[:at] + "\n" + cfg["bullet"] + content[at:]
+    return content, ["Added the intro tie-back to the mechanism section"]
+
+
 def _fill_word_budgets(content, plan):
     """Write what the plan already knows: the Word Count Target section, and a missing
     H1 Target line sized to what the H2 targets leave inside the tier."""
@@ -781,6 +801,8 @@ def apply_deterministic(content, ctx):
                 if corrected != body:
                     content=content[:start]+corrected+content[end:]
                     notes.append('Normalized the at-a-glance table columns')
+        content, more = _add_mechanism_tie_back(content, template)
+        notes += more
 
     content, more = _fill_word_budgets(content, ctx.get("plan") or {})
     notes += more

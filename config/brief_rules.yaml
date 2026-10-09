@@ -192,5 +192,11 @@ refresh:
   # Page headings from this marker on are site widgets, not article content.
   end_of_article: ['(?i)^related resources$', '(?i)^have questions\b']
 
+# The named-mechanism H2 must tie back to the intro's problem. When its guidance
+# does not, code adds this bullet instead of failing the brief.
+mechanism_tie_back:
+  pattern: '(?i)\bintro(?:duction)?\b|\bopening\b|\bloop\b|\bties? (?:\w+ )?back\b'
+  bullet: "- Tie this back to the problem named in the intro: show how the mechanism above resolves it for the reader."
+
 repair:
   max_rounds: 1

@@ -297,7 +297,12 @@ class CheckTests(unittest.TestCase):
         no_tie = section.replace(" Tie it back to the intro problem of every agent needing isolated state and vector memory.", "").replace(
             "This heading closes the loop on the intro problem. ", "")
         self.assertNotEqual(no_tie, section)
-        self.assertIn("section_how_tidb_solves", failing(self.good.replace(section, no_tie), self.ctx))
+        # A missing tie-back is added by code, not failed.
+        repaired, notes = bq.apply_deterministic(self.good.replace(section, no_tie), self.ctx)
+        self.assertIn("Added the intro tie-back to the mechanism section", notes)
+        self.assertIn(bq.rules()["mechanism_tie_back"]["bullet"], repaired)
+        self.assertNotIn("section_how_tidb_solves", failing(repaired, self.ctx))
+        self.assertEqual(bq.apply_deterministic(self.good, self.ctx)[0].count(bq.rules()["mechanism_tie_back"]["bullet"]), 0)
         h2 = "## How TiDB solves agent backend sprawl with distributed SQL on TiKV"
         section = self.good[self.good.index(h2):self.good.index("## Supabase alternative FAQs")]
         stripped = re.sub(r"(?i)TiKV|Raft|native VECTOR type|VECTOR", "the engine", section)
