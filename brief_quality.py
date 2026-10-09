@@ -396,18 +396,18 @@ def competitor_name(content, ctx):
         if index is not None:
             _, start, end = parts["h2s"][index]
             rows = table_rows(content[start:end])
-            column = spec["columns"].index("{competitor}")
+            fixed = {_header_key(c) for c in spec["columns"] if c != "{competitor}"}
             header = [_header_key(c) for c in rows[0]] if rows else []
-            if len(header) > column and header[0] == spec["columns"][0].casefold():
-                # The competitor is whichever product column is not TiDB.
-                others = [rows[0][i].strip("*") for i, key in enumerate(header[1:], 1) if key != "tidb"]
+            if header and header[0] == _header_key(spec["columns"][0]):
+                # The competitor is the one column that is not a fixed template label.
+                others = [rows[0][i].strip("*") for i, key in enumerate(header) if key not in fixed]
                 if others:
                     return others[0]
     return ctx.get("competitor")
 
 
 # Header labels models use for the same at-a-glance column.
-_HEADER_SYNONYMS = {"category": "criteria", "tidb product": "tidb"}
+_HEADER_SYNONYMS = {"criteria": "category", "tidb": "tidb product"}
 
 
 def _header_key(cell):
@@ -431,7 +431,7 @@ def normalize_glance_table(body, spec, competitor):
     if start is None:
         return body
     keys = [_header_key(c) for c in _cells(lines[start])]
-    wanted = [e.casefold() for e in expected]
+    wanted = [_header_key(e) for e in expected]
     if sorted(keys) != sorted(wanted):
         return body
     order = [keys.index(w) for w in wanted]

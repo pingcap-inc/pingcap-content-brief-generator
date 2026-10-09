@@ -42,9 +42,9 @@ Senior engineers, platform architects, and AI infrastructure leads at AI-native 
 
 | Section (H2) | Anchor text | Target URL | Why |
 |--------------|-------------|------------|-----|
-| h2_9 | distributed SQL database for AI applications | https://www.pingcap.com/ai/ | The How TiDB solves section sends evaluators to the AI hub once the mechanism is clear. |
-| h2_1 | TiDB vs PostgreSQL comparison | https://www.pingcap.com/compare/tidb-vs-postgresql/ | The at a glance table compares database models, which the PostgreSQL comparison expands on. |
-| h2_6 | TiDB Cloud Zero for agents | https://www.pingcap.com/tidb/cloud/zero/ | The operations section explains per-agent TiDB Cloud Zero instances, which this page covers in depth. |
+| h2_10 | distributed SQL database for AI applications | https://www.pingcap.com/ai/ | The decision endcap sends evaluators to the AI hub after they pick evaluation criteria. |
+| h2_2 | TiDB vs PostgreSQL comparison | https://www.pingcap.com/compare/tidb-vs-postgresql/ | The at a glance table compares database models, which the PostgreSQL comparison expands on. |
+| h2_5 | TiDB Cloud Zero for agents | https://www.pingcap.com/tidb/cloud/zero/ | The deployment section explains per-agent TiDB Cloud Zero instances, which this page covers in depth. |
 
 ### LLM Visibility Snapshot
 
@@ -95,78 +95,45 @@ Intro guidance: open with the problem agent teams hit when every agent needs its
 
 **Rationale**: Searchers comparing a supabase alternative want the decision framed in the first screen. Naming TiDB Cloud Zero, TiKV, and Supabase together builds the entity association this page targets.
 
+## Which Supabase alternative fits AI agent backends?
+
+Target: ~288–352 words
+
+**Rationale**: This heading mirrors the question form of the primary keyword. It sets up the evaluation logic the rest of the page follows.
+
+**Inline Content Guidance**: Answer in the first three sentences: Supabase suits teams that want a bundled Postgres backend, while TiDB Cloud Zero suits teams that need many isolated, disposable databases with vector search in SQL. End by signalling that the table below compares them category by category.
+
+**Visual:** None needed: prose is sufficient for this section.
+
 ## TiDB Cloud Zero vs Supabase at a glance
-
-Target: ~432–528 words
-
-**Rationale**: At a glance queries reward a scannable table, and this heading mirrors the question form of the primary keyword. The table places Supabase and TiDB entities side by side for LLM extraction.
-
-**Inline Content Guidance**: Answer in the first three sentences: Supabase suits teams that want a bundled Postgres backend, while TiDB Cloud Zero suits teams that need many isolated, disposable databases with vector search in SQL. Then present the table.
-
-| Criteria | TiDB | Supabase |
-|---|---|---|
-| Primary use | Distributed SQL for many isolated agent databases | Bundled Postgres backend with auth and storage |
-| Architecture / database model | TiDB Cloud Zero distributed SQL on TiKV, MySQL compatible | Managed Postgres per project |
-| SQL / protocol compatibility | MySQL protocol, drivers, and ORMs | PostgreSQL protocol with a REST layer |
-| Consistency & transactions | ACID transactions with Raft replication | ACID transactions on a single Postgres primary |
-| Scaling model | Horizontal scale on TiKV | One Postgres instance per project, scaled vertically |
-| HTAP / analytics | TiFlash columnar replicas for analytics on fresh data | Postgres analytics or an external warehouse |
-| High availability / multi-region | Raft replicas across zones | Read replicas and point-in-time recovery on paid plans |
-| Operations / deployment | Instance created with one API call | Project created in the dashboard or CLI |
-| Vector support | Native VECTOR type with VEC_COSINE_DISTANCE | pgvector extension with HNSW indexes |
-| Pricing model | Request Units billing on TiDB Cloud Starter | Usage-based plans per project |
-
-Sources: https://supabase.com/docs (verify before publication)
-
-### Key differences
-
-Supabase bundles auth and storage around one Postgres project; TiDB Cloud Zero gives every agent a disposable distributed SQL database with vectors built in.
-
-**Visual:** Table: the comparison table above.
-
-## How do TiDB and Supabase differ in architecture?
-
-Target: ~396–484 words
-
-**Rationale**: Architecture queries signal mid-funnel evaluation. Naming TiKV, PD, and Postgres surfaces the entities that explain each product's limits.
-
-**Inline Content Guidance**: Explain the TiDB server, TiKV, PD, and TiFlash layers, then the Supabase project model around one Postgres database. Close with what each design means for agent workloads.
-
-### TiDB architecture
-
-Compute and storage are separated, so each layer scales on its own.
-
-### Supabase architecture
-
-Each project bundles Postgres, auth, storage, and edge functions.
-
-**Visual:** Architecture diagram: both stacks side by side.
-
-## How do TiDB and Supabase compare on compatibility and migration?
-
-Target: ~360–440 words
-
-**Rationale**: Developers check driver and SQL fit before committing. MySQL clients, Postgres clients, and frameworks are the entities that decide adoption.
-
-**Inline Content Guidance**: Cover SQL client support (MySQL clients for TiDB, Postgres clients for Supabase), frameworks such as LangChain and LlamaIndex, and a migration path: export the schema, convert types, validate queries, then cut over.
-
-**Visual:** Table: compatibility matrix.
-
-## Which scales better for agent workloads?
-
-Target: ~396–484 words
-
-**Rationale**: Scale and availability queries come from teams planning for many tenants. Raft replication and vertical scaling are the entities to contrast.
-
-**Inline Content Guidance**: Compare transactions, horizontal scale on TiKV, and failover. Tell the writer what to benchmark in a POC, with a year and conditions for every number.
-
-**Visual:** Table: POC benchmark checklist.
-
-## How do analytics and AI workloads compare?
 
 Target: ~324–396 words
 
-**Rationale**: AI queries decide this comparison. Naming pgvector and the native VECTOR type surfaces both vector entities.
+**Rationale**: At a glance queries reward a scannable table. The table places Supabase and TiDB entities side by side for LLM extraction.
+
+| Category | Supabase | TiDB product | Best fit |
+|---|---|---|---|
+| Database model | Managed Postgres per project | TiDB Cloud Zero distributed SQL, MySQL compatible | Supabase for Postgres teams; TiDB for MySQL ecosystems |
+| Vector support | pgvector extension with HNSW indexes | Native VECTOR type with VEC_COSINE_DISTANCE | Both handle vector search in SQL |
+| Auth | Supabase Auth with Row Level Security | Bring your own auth provider | Supabase when auth must be bundled |
+| Storage | Supabase Storage for files and objects | Pair with object storage such as S3 | Supabase for bundled file storage |
+| MCP/AI tooling workflow | Hosted Supabase MCP server for agents | TiDB MCP server and agent-ready instances | Both support MCP-driven agents |
+| Setup/provisioning | Project created in the dashboard or CLI | Instance created with one API call | TiDB for per-agent disposable databases |
+| Multi-tenant scale | One Postgres instance per project, scaled vertically | Horizontal scale on TiKV with Raft replication | TiDB for many tenants on one cluster |
+| Operational tradeoffs | Simple start, manual sharding at large scale | Distributed system concepts to learn | Depends on expected tenant growth |
+| Pricing model | Usage-based plans per project | Request Units billing on TiDB Cloud Starter | Compare against expected agent traffic |
+
+Sources: https://supabase.com/docs (verify before publication)
+
+**Inline Content Guidance**: Keep every competitor cell factual and describe Supabase strengths such as bundled auth and storage.
+
+**Visual:** Table: the comparison table above.
+
+## Which capabilities differ for agent workloads?
+
+Target: ~396–484 words
+
+**Rationale**: Capability queries signal mid-funnel evaluation. Naming pgvector and the native VECTOR type surfaces both vector entities.
 
 **Inline Content Guidance**: Compare vector search, transactions, and analytics. Show a TiDB vector query:
 
@@ -183,17 +150,53 @@ For contrast, show the Supabase pgvector form:
 SELECT id FROM agent_memory ORDER BY embedding <=> '[0.1, 0.2, 0.3]' LIMIT 5;
 ```
 
+### Key differences
+
+Supabase relies on the pgvector extension; TiDB exposes vector distance as SQL functions on a native type.
+
 **Visual:** Code snippet: SQL for both products.
 
-## How do operations and deployment differ?
+## How do integrations and the developer workflow compare?
+
+Target: ~360–440 words
+
+**Rationale**: Developers search for workflow fit before committing. MCP, SQL clients, and frameworks are the entities that decide adoption.
+
+**Inline Content Guidance**: Cover MCP servers for both products, SQL client support (MySQL clients for TiDB, Postgres clients for Supabase), and frameworks such as LangChain and LlamaIndex.
+
+### Key differences
+
+Supabase ships client SDKs around its REST layer; TiDB works with standard MySQL drivers and ORMs.
+
+**Visual:** Table: integrations matrix.
+
+## How do deployment, governance, and multi-tenant architecture differ?
 
 Target: ~324–396 words
 
-**Rationale**: Architects look for tenancy and operating models at this stage. Per-agent isolation and the MCP workflow are the entities to surface.
+**Rationale**: Architects look for tenancy models at this stage. Per-agent isolation and Raft replication are the entities to surface.
 
-**Inline Content Guidance**: Explain per-project Postgres for Supabase and per-agent TiDB Cloud Zero instances. TiDB Cloud Zero instances expire after 30 days unless claimed. Claiming a TiDB Cloud Zero instance takes three clicks and converts it to TiDB Cloud Starter. Show the API call: POST https://zero.tidbapi.com/v1beta1/instances. Cover MCP servers for both products.
+**Inline Content Guidance**: Explain per-project Postgres for Supabase and per-agent TiDB Cloud Zero instances. TiDB Cloud Zero instances expire after 30 days unless claimed. Claiming a TiDB Cloud Zero instance takes three clicks and converts it to TiDB Cloud Starter. Show the API call: POST https://zero.tidbapi.com/v1beta1/instances
+
+### Key differences
+
+Supabase isolates by project; TiDB Cloud Zero isolates by disposable instance created through an API.
 
 **Visual:** Architecture diagram: tenancy models side by side.
+
+## What do support, reviews, and market signals show?
+
+Target: ~252–308 words
+
+**Rationale**: Buyers check social proof before shortlisting. Review platforms add third-party entities to the page.
+
+**Inline Content Guidance**: Point the writer to the exact G2, Capterra, and Clutch pages for Supabase and TiDB. Capture the score, review count, and retrieval date for each. Do not state any rating in the draft until captured. Cite Manus as an agent platform customer: https://www.pingcap.com/case-study/manus-agentic-ai-database-tidb/
+
+### Key differences
+
+Supabase has a large community presence; TiDB has enterprise references such as Manus.
+
+**Visual:** Table: review platform, score, review count, retrieval date.
 
 ## How does pricing compare for agent backends?
 
@@ -203,45 +206,25 @@ Target: ~288–352 words
 
 **Inline Content Guidance**: Supabase Pro starts at $25 per month per project as of 2026, per https://supabase.com/pricing (verify before publication). For TiDB, describe the Request Units billing model on TiDB Cloud Starter rather than list prices.
 
+### Key differences
+
+Supabase prices per project tier; TiDB Cloud Starter bills by Request Units consumed.
+
 **Visual:** Table: billing model comparison.
-
-## Who should choose TiDB vs Supabase?
-
-Target: ~288–352 words
-
-**Rationale**: Decision queries close the evaluation. Listing criteria helps readers self-select.
-
-**Inline Content Guidance**: Give evaluation criteria: tenant count, vector workload size, auth needs, and team SQL dialect.
-
-### Choose TiDB if
-
-You need many isolated agent databases, vector search in SQL, and horizontal scale.
-
-### Choose Supabase if
-
-You want bundled auth and storage around a single Postgres project.
-
-**Visual:** Table: decision criteria checklist.
 
 ## How TiDB solves agent backend sprawl with distributed SQL on TiKV
 
-Target: ~324–396 words
+Target: ~432–528 words
 
 **Rationale**: This heading closes the loop on the intro problem. Naming TiKV and Raft ties the solution to concrete mechanisms.
 
-**Inline Content Guidance**: Name the mechanism in the first sentence: distributed SQL on TiKV with Raft replication and the native VECTOR type. Tie it back to the intro problem of every agent needing isolated state and vector memory. Cite Manus as an agent platform customer: https://www.pingcap.com/case-study/manus-agentic-ai-database-tidb/
-
-### Start your evaluation
-
-Close with the CTA.
-
-**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/)
+**Inline Content Guidance**: Name the mechanism in the first sentence: distributed SQL on TiKV with Raft replication and the native VECTOR type. Tie it back to the intro problem of every agent needing isolated state and vector memory.
 
 **Visual:** Architecture diagram: TiKV regions serving many agent databases.
 
 ## Supabase alternative FAQs
 
-Target: ~252–308 words
+Target: ~288–352 words
 
 **Rationale**: FAQ queries capture long-tail questions. Answers add extractable bullets for AI Overviews.
 
@@ -271,6 +254,18 @@ Target: ~252–308 words
 
 **Visual:** None needed: prose is sufficient for this section.
 
+## How should you choose between Supabase and TiDB Cloud Zero?
+
+Target: ~432–528 words
+
+**Rationale**: Decision queries close the evaluation. Listing criteria helps readers self-select.
+
+**Inline Content Guidance**: Give evaluation criteria: tenant count, vector workload size, auth needs, and team SQL dialect. Then close with the CTA.
+
+**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/)
+
+**Visual:** Table: decision criteria checklist.
+
 ### Schema Markup Recommendations
 
 - FAQPage: applies to the FAQ H2 and makes answers eligible for rich results.
@@ -278,7 +273,7 @@ Target: ~252–308 words
 
 ### CTAs
 
-**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/), in the How TiDB solves H2.
+**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/), in the decision H2.
 **Secondary CTA:** Compare TiDB with PostgreSQL, https://www.pingcap.com/compare/tidb-vs-postgresql/, after the at a glance table, for architects.
 **Secondary CTA:** Try the agent starter kit, https://www.pingcap.com/unverified-kit/, after the FAQ, for developers.
 

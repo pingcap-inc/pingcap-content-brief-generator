@@ -1021,9 +1021,8 @@ def validate_brief(content, content_type, candidates, plan, ctx=None):
     h2s = list(re.finditer(r"(?m)^##\s+(.+)$", outline))
     if not 1 <= len(h2s) <= (12 if content_type == "listicle" else 10):
         errors.append("Invalid number of article H2s")
-    # Comparison pages lead with the at-a-glance table, as on pingcap.com/compare/;
-    # listicles put a quick answer first.
-    glance = {"comparison": 0, "alternative": 0, "listicle": 1}.get(content_type)
+    # An AEO answer (comparison) or quick answer (listicle) precedes the table.
+    glance = {"comparison": 1, "alternative": 1, "listicle": 1}.get(content_type)
     if glance is not None and (
         len(h2s) <= glance or not re.search(r"(?i)at[- ]a[- ]glance|side[- ]by[- ]side", h2s[glance].group(1))
     ):

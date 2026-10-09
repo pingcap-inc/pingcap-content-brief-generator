@@ -35,18 +35,29 @@ class FollowupTests(unittest.TestCase):
 
     def test_equivalent_tidb_column_is_normalized(self):
         text,ctx,_=finished(ctx=context(competitor='Supabase'))
-        text=text.replace('| Criteria | TiDB | Supabase |','| Category | TiDB product | Supabase |')
+        text=text.replace('| Category | Supabase | TiDB product | Best fit |','| Criteria | Supabase | TiDB | Best fit |')
         corrected,_=bq.apply_deterministic(text,ctx)
-        self.assertIn('| Criteria | TiDB | Supabase |',corrected)
+        self.assertIn('| Category | Supabase | TiDB product | Best fit |',corrected)
+
+    def test_swapped_product_columns_are_reordered(self):
+        text,ctx,_=finished(ctx=context(competitor='Supabase'))
+        row='| Database model | Managed Postgres per project | TiDB Cloud Zero distributed SQL, MySQL compatible | Supabase for Postgres teams; TiDB for MySQL ecosystems |'
+        cells=row.strip('|').split('|')
+        swapped=text.replace('| Category | Supabase | TiDB product | Best fit |','| Category | TiDB product | Supabase | Best fit |').replace(
+            row,'|'+'|'.join([cells[0],cells[2],cells[1],cells[3]])+'|')
+        corrected,_=bq.apply_deterministic(swapped,ctx)
+        self.assertIn('| Category | Supabase | TiDB product | Best fit |',corrected)
+        self.assertIn('| Database model | Managed Postgres per project | TiDB Cloud Zero',corrected)
+        self.assertNotIn('section_at_a_glance',failing(corrected,ctx))
 
     def test_bare_domains_do_not_count_as_source_urls(self):
         spec=bq.glance_spec(bq.template_for('comparison'))
-        text='| Criteria | TiDB | MariaDB |\n|---|---|---|\n**Sources:** mariadb.com/kb/ (verify before publication)'
+        text='| Category | MariaDB | TiDB product | Best fit |\n|---|---|---|---|\n**Sources:** mariadb.com/kb/ (verify before publication)'
         self.assertTrue(any('https://' in p for p in bq._glance_problems(text,spec,'MariaDB')))
 
     def test_unqualified_false_vector_claim_is_rejected(self):
         spec=bq.glance_spec(bq.template_for('comparison'))
-        text='| Criteria | TiDB | MariaDB |\n|---|---|---|\n| Vector support | VECTOR | No native VECTOR type |'
+        text='| Category | MariaDB | TiDB product | Best fit |\n|---|---|---|---|\n| Vector support | No native VECTOR type | VECTOR | Version-specific |'
         self.assertTrue(any('11.7.1' in p for p in bq._glance_problems(text,spec,'MariaDB')))
 
     def test_repeated_technical_link_topic_is_not_discarded(self):
@@ -66,21 +77,15 @@ class FollowupTests(unittest.TestCase):
 
 
 class CompareHouseFormatTests(unittest.TestCase):
-    """Comparison and listicle outlines follow the live pingcap.com/compare/ pages."""
+    """Comparisons follow the approved Aug 2026 briefs; listicles follow the live /compare/ pages."""
 
-    def test_comparison_leads_with_glance_and_closes_with_faqs(self):
+    def test_comparison_follows_the_approved_briefs(self):
         template=bq.template_for('comparison')
-        titles=['TiDB vs OceanBase at a Glance','What Makes TiDB and OceanBase Architecturally Different?',
-                'How Do TiDB and OceanBase Compare on Compatibility and Migration?',
-                'Which Database Performs Better as Workloads Grow?',
-                'Which Platform Is Better for AI and Vector Workloads?',
-                'Which Platform Is Easier to Run in Cloud-Native Environments?',
-                'How Should Buyers Compare Pricing Models and Total Cost?',
-                'Who Should Choose TiDB vs OceanBase?','How TiDB Helps Teams Outgrow OceanBase Limits',
-                'TiDB vs OceanBase FAQs']
-        found=bq.match_template_sections(titles,template)
-        self.assertEqual([found[s['id']] for s in template['sections']],list(range(10)))
-        self.assertEqual(bq.glance_spec(template)['columns'],['Criteria','TiDB','{competitor}'])
+        self.assertEqual(bq.glance_spec(template)['columns'],['Category','{competitor}','TiDB product','Best fit'])
+        ids=[s['id'] for s in template['sections']]
+        self.assertEqual(ids[:2],['aeo_answer','at_a_glance'])
+        self.assertIn('reviews',ids)
+        self.assertEqual(ids[-2:],['faqs','decision'])
 
     def test_listicle_spotlight_uses_live_heading(self):
         template=bq.template_for('listicle')

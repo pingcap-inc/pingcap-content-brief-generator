@@ -275,8 +275,6 @@ Directly under the H1 (after its Target line), write:
   question or search intent. The first 2 to 3 sentences under this H2 must be written
   as a self-contained, extractable answer. If a competitor already holds the featured
   snippet for this query, note it in one guidance bullet.
-  On comparison and alternative pages, the at-a-glance H2 is this AEO answer H2:
-  the answer sentences come before the table.
 - Named mechanism H2 (mandatory for all content types): one H2 that explicitly
   closes the loop between the problem raised in the intro and the specific TiDB
   mechanism that solves it. It must name the actual mechanism ({{mechanisms}}) and
