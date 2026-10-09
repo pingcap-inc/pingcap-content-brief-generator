@@ -256,7 +256,6 @@ Target: ~252–308 words
 **Answer guidance:**
 - Export Postgres schema and data, then convert types for MySQL compatibility.
 - Use TiDB Data Migration tooling where it fits.
-- Validate queries that rely on Postgres-only features.
 
 ### Which database handles vector search and SQL for AI agents?
 

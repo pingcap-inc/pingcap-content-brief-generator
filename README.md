@@ -123,7 +123,9 @@ Rules, templates and lists live in `config/`, not in code:
    template H2s and order, at-a-glance table, Key differences H3, decision H3s, pricing,
    one primary CTA, internal links (priority, required, section relevance), case
    studies, FAQs, style lint (em dashes, banned words, TiDB superlatives), product
-   facts, TiDB SQL `<=>` misuse (parsed with sqlglot), empty data, word count.
+   facts, TiDB SQL `<=>` misuse (parsed with sqlglot), empty data, word count, and
+   brief length: the brief itself stays at or under 2,500 words for every content type
+   (per-section caps in `brief_length` in `config/brief_rules.yaml`; fenced code excluded).
 3. **One repair round.** Failing sections are regenerated once, alone, and spliced
    back. If anything still fails, the brief is rejected.
 
@@ -214,7 +216,7 @@ at-a-glance placement (first H2 for comparisons, second for listicles), word bud
 structure, and supplied internal-link URLs and placements. Truncated responses or
 validation failures stop the run with an error after preserving `draft.md`,
 `validation.json`, and `research.md` in a unique local `brief_failed_*` folder.
-Brief generation defaults to 16,000 output tokens (21,000 for listicles); override with a positive integer
+Brief generation defaults to 16,000 output tokens; override with a positive integer
 in `ANTHROPIC_MAX_TOKENS` in your local `.env` (title generation remains at 50).
 Known outline formatting variants (`## H1:` and a visual-summary heading) are
 normalized before validation and export, without changing article content or budgets.

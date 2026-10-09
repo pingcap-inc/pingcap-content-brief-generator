@@ -114,22 +114,13 @@ guidance: |
   Title: "Best [topic] reviewed"
   Target: use the corresponding supplied section budget.
   Content: Each vendor gets its own H3 named with the product name only (for
-  example "TiDB", "ClickHouse"), as on the live /compare/ listicles. Use the same
-  7-part vendor template for every entry:
-    - **Best for**: one-sentence positioning statement
-    - **Why it's on the list**: 2–3 sentences on why this product fits the topic
-    - **Key features**: 3–5 bullet points of relevant capabilities
-    - **Pros**: 2–4 bullet points
-    - **Cons / tradeoffs**: 2–3 bullet points (be honest)
-    - **Pricing**: current pricing model (note if self-serve vs. enterprise-only)
-    - **Getting started**: one sentence pointing to docs, trial, or quickstart
-    - **Framework score**: After the 7-part template, add a one-sentence explicit
-      score against each of the 3 evaluation criteria defined in H2 4. Format:
-      "[Criterion 1]: [one-sentence verdict]. [Criterion 2]: [one-sentence verdict].
-      [Criterion 3]: [one-sentence verdict]." This ties every vendor review back
-      to the unifying framework and gives the article analytical consistency.
-  For each listed product, include exact G2, Capterra, or Clutch review links
-  only if live pages are verified by a human before publication.
+  example "TiDB", "ClickHouse"), as on the live /compare/ listicles. In the brief,
+  vendor H3s are heading lines only: state the vendor template ONCE in this H2's
+  bullets, never repeat it per vendor. The template every review follows:
+  Best for, Why it's on the list, Key features, Pros, Cons / tradeoffs, Pricing,
+  Getting started, then a one-sentence verdict against each of the 3 evaluation
+  criteria from H2 4. Note that G2, Capterra, or Clutch links are added only if a
+  human verifies the live pages before publication.
 
   **H2 8: TiDB spotlight**
   Title: "When is TiDB the best [category]?"

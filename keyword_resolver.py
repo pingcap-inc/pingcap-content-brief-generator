@@ -621,9 +621,16 @@ def brief_header(resolution):
              'Override below threshold: '+('yes (writer confirmed despite failed checks)' if c.get('override_below_threshold') else 'no')]
     lines += [('- '+plain(f)) for f in c.get('threshold_failures') or []]
     lines += ['', 'Runner-up candidates and scores:']
-    for row in resolution['supporting_candidates']:
+    # Keep the provenance short: every SERP-scored candidate, then the highest-volume rest.
+    rows = resolution['supporting_candidates']
+    scored = [r for r in rows if r.get('scores')]
+    rest = sorted((r for r in rows if not r.get('scores')), key=lambda r: -(r.get('msv') or 0))
+    shown = scored + rest[:max(0, 8 - len(scored))]
+    for row in shown:
         score_value = row.get('scores')
         lines.append((f"- {plain(row['keyword'])}: {score_value['total']:.3f}" if score_value else f"- {plain(row['keyword'])}: not SERP-scored") + ' (' + plain(row['status']) + ')')
+    if len(rows) > len(shown):
+        lines.append(f"- {len(rows) - len(shown)} more unscored candidates in validation.json")
     lines += ['', 'Acknowledged warnings:']+[('- '+plain(w['message'])) for w in resolution['warnings']]
     if not resolution['warnings']:
         lines.append('- None')

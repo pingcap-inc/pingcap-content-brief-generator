@@ -1034,8 +1034,6 @@ def validate_brief(content, content_type, candidates, plan, ctx=None):
         section_intro = re.split(r"(?m)^#{1,4}\s+", section, maxsplit=1)[0]
         if parse_word_budget(section_intro) is None:
             errors.append(f"Missing word budget: {match.group(1)}")
-        if not re.search(r"\*?\*?Visual:\*?\*?", section):
-            errors.append(f"Missing Visual line: {match.group(1)}")
     # Count only the first target beneath each H1/H2; H3 budgets are nested.
     targets = []
     for match in re.finditer(r"(?m)^#{1,2}\s+.+$", outline):
@@ -1128,10 +1126,7 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
     pages only, priority_link is required, and every check is written to validation.json.
     """
     try:
-        # Listicles carry a 7-part review per vendor and overrun 16k; 21k is the largest
-        # value the SDK accepts without streaming.
-        default_max_tokens = "21000" if content_type == "listicle" else "16000"
-        brief_max_tokens = int(os.getenv("ANTHROPIC_MAX_TOKENS") or default_max_tokens)
+        brief_max_tokens = int(os.getenv("ANTHROPIC_MAX_TOKENS") or "16000")
     except ValueError as exc:
         raise ValueError("ANTHROPIC_MAX_TOKENS must be a positive integer") from exc
     if brief_max_tokens <= 0:

@@ -819,7 +819,10 @@ def run_checks(content, ctx, structural_errors=()):
     checks.append(_facts_check(content))
     checks.append(_sql_check(content))
 
-    # 12. Word count.
+    # 12. Brief length: the brief stays a scannable plan, not a draft article.
+    checks.append(_length_check(content, parts, found, template))
+
+    # 13. Word count.
     tier = ctx.get("plan") or {}
     problems = [e for e in structural_errors if "budget" in e.lower()]
     if tier.get("primary_keyword_msv") is None:
@@ -1216,6 +1219,46 @@ def _sql_check(content):
             problems.append("Inline TiDB/MySQL SQL uses <=> on a vector: " + message)
             units.append(unit_at(content, mt.start()))
     return _check("sql_vector_syntax", problems, units)
+
+
+def brief_words(text):
+    """Words a writer reads; fenced code samples are not counted."""
+    return len(plain_words(re.sub(r"(?ms)^```.*?^```", "", text)))
+
+
+def _length_check(content, parts, found, template):
+    cfg = rules()["brief_length"]
+    problems, units, sizes = [], [], {}
+    for name, (head, body, end) in sections(content).items():
+        if name == OUTLINE:
+            continue
+        sizes[name] = brief_words(content[body:end])
+        cap = cfg["section_max_words"].get(name)
+        if cap and sizes[name] > cap:
+            problems.append(f"{name} is {sizes[name]} words; maximum {cap}")
+            units.append(name)
+    caps = {index: spec.get("max_words") for spec in template.get("sections", [])
+            for sid, index in found.items() if sid == spec["id"] and spec.get("max_words")}
+    faq = found.get(template.get("faq_section"))
+    outline = [(OUTLINE + "::preamble", parts["preamble"], cfg["outline_preamble_max_words"])]
+    if parts.get("h1"):
+        outline.append((OUTLINE + "::h1", parts["h1"], cfg["h1_max_words"]))
+    for i, (title, start, end) in enumerate(parts["h2s"]):
+        cap = caps.get(i) or (cfg["faq_max_words"] if i == faq else cfg["h2_max_words"])
+        outline.append((_section_unit(i), (start, end), cap))
+    for unit, (start, end), cap in outline:
+        sizes[unit] = brief_words(content[start:end])
+        if sizes[unit] > cap:
+            problems.append(f"{unit.split('::')[-1]} is {sizes[unit]} words; maximum {cap}. "
+                            "Keep a Target line, a one-sentence rationale, and 2 to 3 short guidance bullets; H3s are heading lines")
+            units.append(unit)
+    total = brief_words(content)
+    if total > cfg["max_words"]:
+        problems.append(f"Brief is {total} words; maximum {cfg['max_words']}. Shorten the longest sections")
+        # Without a per-unit overrun, shorten the three longest units.
+        if not units:
+            units = sorted(sizes, key=sizes.get, reverse=True)[:3]
+    return _check("brief_length", problems, units)
 
 
 def failures(checks):

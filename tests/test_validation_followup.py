@@ -109,3 +109,38 @@ class SecondMariaDBRunTests(unittest.TestCase):
         self.assertFalse(bq.link_allowed('https://www.pingcap.com/case-study/zalopay-using-a-scale-out-mysql-alternative-to-serve-millions-of-users/'))
         self.assertTrue(bq.link_allowed('https://www.pingcap.com/case-studies/'))
         self.assertTrue(bq.link_allowed('https://www.pingcap.com/compare/mysql-compatible-database/'))
+
+
+class BriefLengthTests(unittest.TestCase):
+    """Briefs stay within the approved sample length (about 2,500 words) for every type."""
+
+    def test_fixture_is_within_length(self):
+        text,ctx,_=finished()
+        self.assertNotIn('brief_length',failing(text,ctx))
+        self.assertLessEqual(bq.brief_words(text),bq.rules()['brief_length']['max_words'])
+
+    def test_overlong_h2_is_sent_to_repair(self):
+        text,ctx,_=finished()
+        padded=text.replace('**Visual:** Table: billing model comparison.',
+                            ' '.join(['Explain the billing model in more depth.']*40)+'\n\n**Visual:** Table: billing model comparison.')
+        check=next(c for c in bq.run_checks(padded,ctx) if c['id']=='brief_length')
+        self.assertFalse(check['passed'])
+        self.assertEqual(check['units'],['Outline / Headings::h2_7'])
+
+    def test_overlong_brief_is_rejected(self):
+        text,ctx,_=finished()
+        filler=' '.join(['word']*600)
+        padded=text
+        for unit in ('**Rationale**: Architecture queries','**Rationale**: Developers check','**Rationale**: Scale and availability',
+                     '**Rationale**: AI queries'):
+            padded=padded.replace(unit,'```\n'+filler+'\n```\n'+unit)
+        self.assertNotIn('brief_length',failing(padded,ctx),'fenced code is not counted')
+        long=text.replace('### Schema Markup Recommendations',(filler+'\n\n')*1+'### Schema Markup Recommendations')
+        self.assertIn('brief_length',failing(long,ctx))
+
+    def test_prompt_states_the_cap(self):
+        for content_type in ['comparison','listicle','solution','blog']:
+            base,checklist=bq.system_prompt_parts(content_type,{'url':'https://www.pingcap.com/ai/','anchor':'AI'},'Supabase')
+            self.assertIn('2500 words',base)
+            self.assertNotIn('at least 50%',base+checklist)
+            self.assertNotIn('and a Visual line',checklist)

@@ -3,12 +3,11 @@
 Before outputting the brief, verify every item below. Rewrite any section that
 fails a check before proceeding. The generator re-checks most items in code.
 
-1.  The Outline / Headings section is the longest section and accounts for at
-    least 50% of the total brief word count.
-2.  Every H2 and H3 has a Rationale of EXACTLY 2 sentences: sentence 1 covers
-    search intent; sentence 2 covers LLM entity co-occurrence, buyer evaluation
-    logic, or semantic positioning.
-3.  Every H2 and H3 has specific inline content guidance.
+1.  The whole brief is at most {{brief_length.max_words}} words (fenced code excluded), and no
+    section exceeds its cap. Bullets, not paragraphs; no rule restated twice.
+2.  Every H2 has a one-sentence Rationale (at most 30 words) and 2 to 3 guidance
+    bullets (each at most 30 words).
+3.  H3s are heading lines only, except FAQ answer bullets and template-required tables.
 4.  The brief contains NO standalone sections titled "Key Points to Cover",
     "Proof Points", "Data to Find", "Examples", "Visuals to Add",
     "Competitor Analysis", "Search Intent Analysis", or "PingCAP/TiDB Angle".
@@ -42,9 +41,9 @@ fails a check before proceeding. The generator re-checks most items in code.
 17. Every competitor pricing or feature claim has a source URL and the marker
     "{{claims.verify_marker}}". No invented review ratings.
 18. SQL labeled TiDB or MySQL never uses <=> for vector distance.
-19. Heading hierarchy is strictly H1 -> H2 -> H3 -> H4 with no skips, and the
+19. Heading hierarchy is strictly H1 -> H2 -> H3 with no skips, and the
     outline has at most 10 H2s (12 for listicles).
-20. Every H2 includes a "Target: ~X–Y words" line and a Visual line; top-level
+20. Every H2 includes a "Target: ~X–Y words" line, no Visual line, and top-level
     targets sum to within the Word Count Plan tier.
 21. The brief contains a standalone Target Audience section between Page Goal and
     Technical Notes, and a Writer Guardrails section with all six items.

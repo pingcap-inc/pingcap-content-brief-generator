@@ -30,6 +30,8 @@ sections:
     label: TiDB vs [Competitor] at a glance
     match: ['(?i)at[- ]a[- ]glance', '(?i)side[- ]by[- ]side']
     key_differences: true
+    # The validated table lives in the brief, so this H2 gets more room.
+    max_words: 320
     table:
       columns: [Criteria, TiDB, "{competitor}"]
       min_rows: 9
@@ -114,12 +116,15 @@ guidance: |
   every competitor cell with the competitor's actual capability and never omit
   competitor strengths. Under the table, add a "Sources:" line listing complete
   https:// source URLs for the competitor claims, marked "{{claims.verify_marker}}".
-  Then add an H3 titled "Key differences" with the three or four differences that
-  drive the decision.
+  Then add an H3 titled "Key differences" (a heading line; the writer lists the
+  three or four differences that drive the decision).
 
   **H2 2: Architecture.** For example "How do TiDB and [Competitor] differ in
   architecture?". H3s: TiDB architecture (TiDB server, TiKV, PD, TiFlash),
   [Competitor] architecture, and what the design means for real workloads.
+
+  In the brief, every H3 is a heading line only. Put the guidance in the H2's
+  2 to 3 bullets.
 
   **H2 3: Compatibility and migration.** SQL dialect and protocol, drivers and
   ORMs, what needs testing, and a short migration path (assess, migrate and
@@ -141,8 +146,8 @@ guidance: |
   pingcap.com source. A cost-area table (Cost area | TiDB | [Competitor]) is welcome.
 
   **H2 8: "Who should choose TiDB vs [Competitor]?".** Two H3s titled exactly
-  "Choose TiDB if" and "Choose [Competitor] if", each with concrete, honest
-  selection criteria. Be specific about when the competitor is the better choice.
+  "Choose TiDB if" and "Choose [Competitor] if". The H2 bullets name the concrete,
+  honest selection criteria, including when the competitor is the better choice.
 
   **H2 9: "How TiDB helps teams [solve the problem named in the intro]".** The
   heading starts with "How TiDB helps" (or "How TiDB solves" / "Where TiDB fits").
