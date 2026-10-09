@@ -675,6 +675,46 @@ def _fill_word_budgets(content, plan):
                 line_end = content.index("\n", start) + 1 if "\n" in content[start:end] else end
                 content = content[:line_end] + f"\nTarget: ~{lo}–{hi} words\n" + content[line_end:]
                 notes.append("Added the missing H1 Target line")
+    return _fit_targets_to_tier(content, low, high, notes)
+
+
+def _fit_targets_to_tier(content, low, high, notes):
+    """Scale the H1 and H2 Target ranges proportionally when their sums miss the tier."""
+    parts = outline_parts(content)
+    if not parts:
+        return content, notes
+    found = []
+    for start, end in ([parts["h1"]] if parts.get("h1") else []) + [(s2, e2) for _, s2, e2 in parts["h2s"]]:
+        head_end = content.index("\n", start) + 1 if "\n" in content[start:end] else end
+        nxt = re.search(r"(?m)^#{1,6}\s", content[head_end:end])
+        m = _TARGET.search(content, head_end, head_end + nxt.start() if nxt else end)
+        if m:
+            a = int(m.group(1).replace(",", "")); b = int((m.group(2) or m.group(1)).replace(",", ""))
+            found.append((m, a, b))
+    if not found:
+        return content, notes
+    sum_lo, sum_hi = sum(a for _, a, _ in found), sum(b for _, _, b in found)
+    if sum_lo >= low and sum_hi <= high:
+        return content, notes
+    hi_f = min(1.0, high / sum_hi) if sum_hi else 1.0
+    lo_f = max(1.0, low / sum_lo) if sum_lo else 1.0
+    # Shrink upper bounds down (floor) and raise lower bounds up (ceil), in steps of 5.
+    new = []
+    for m, a, b in found:
+        b2 = int(b * hi_f) // 5 * 5
+        a2 = -(-int(a * lo_f + 0.999) // 5) * 5
+        a2 = min(a2, b2) if b2 else a2
+        new.append((m, a2, max(a2, b2)))
+    if sum(a for _, a, _ in new) < low or sum(b for _, _, b in new) > high:
+        return content, notes
+    for m, a, b in sorted(new, key=lambda x: x[0].start(), reverse=True):
+        # Replace only the numbers, keeping the line's own formatting.
+        if m.group(2):
+            content = content[:m.start(2)] + str(b) + content[m.end(2):]
+            content = content[:m.start(1)] + str(a) + content[m.end(1):]
+        else:
+            content = content[:m.start(1)] + f"{a}–{b}" + content[m.end(1):]
+    notes.append(f"Scaled section Target ranges to fit the {low:,}–{high:,} word tier")
     return content, notes
 
 

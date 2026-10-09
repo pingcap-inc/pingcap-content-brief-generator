@@ -263,3 +263,29 @@ class ScalabilityExplainedRunTests(unittest.TestCase):
                             ' '.join(['note']*200)+'\n\n**Visual:** Table: billing model comparison.')
         self.assertLessEqual(bq.brief_words(padded),bq.rules()['brief_length']['max_words'])
         self.assertIn('brief_length',failing(padded,ctx))
+
+
+class TierFitRunTests(unittest.TestCase):
+    """From brief_failed_o5wrtqr8: H2 Target upper bounds summed to 2,530 for a 1,800-2,500 tier."""
+
+    def test_targets_are_scaled_into_the_tier_keeping_formatting(self):
+        text,ctx,_=finished()
+        ctx=dict(ctx,plan={'primary_keyword_msv':5000,'tier':'5,000+','minimum':3500,'maximum':4000})
+        out,notes=bq.apply_deterministic(text,ctx)
+        self.assertTrue(any('Scaled section Target ranges' in n for n in notes),notes)
+        parts=bq.outline_parts(out)
+        spans=([parts['h1']] if parts['h1'] else [])+[(s,e) for _,s,e in parts['h2s']]
+        his=[]; los=[]
+        for s,e in spans:
+            m=re.search(r'Target: ~(\d+)–(\d+) words',out[s:e])
+            los.append(int(m.group(1))); his.append(int(m.group(2)))
+        self.assertLessEqual(sum(his),4000)
+        self.assertGreaterEqual(sum(los),3500)
+        self.assertNotIn('words words',out)
+
+    def test_bold_target_lines_keep_their_markers(self):
+        text,ctx,_=finished()
+        text=text.replace('Target: ~288–352 words','**Target:** ~288–352 words',1)
+        ctx=dict(ctx,plan={'primary_keyword_msv':5000,'tier':'5,000+','minimum':3500,'maximum':4000})
+        out,_=bq.apply_deterministic(text,ctx)
+        self.assertRegex(out,r'\*\*Target:\*\* ~\d+–\d+ words')
