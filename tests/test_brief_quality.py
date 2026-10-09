@@ -284,7 +284,9 @@ class CheckTests(unittest.TestCase):
         self.assertFails("key_takeaways", "- Agent backends that need many isolated tenants benefit from TiDB horizontal scale on TiKV.\n" + bullet + "\n", "")
         self.assertFails("key_takeaways", "**Key Takeaways**", "**Summary**")
         self.assertFails("eeat", "Add an expert review note", "Add a note")
-        self.assertFails("eeat", "ratings, pricing, and feature availability", "pricing")
+        intro = self.good[self.good.index("Intro guidance:"):].split("\n", 1)[0]
+        no_method = re.sub(r"(?i)[^.]*methodology[^.]*\.", "", intro)
+        self.assertIn("eeat", failing(self.good.replace(intro, no_method), self.ctx))
 
     def test_comparison_template(self):
         self.assertFails("template_sections", "## How TiDB solves agent backend sprawl", "## Why distributed SQL handles agent sprawl")
@@ -292,7 +294,10 @@ class CheckTests(unittest.TestCase):
         self.assertIn("section_integrations", failing(self.good.replace("SQL client", "client"), self.ctx))
         h2 = "## How TiDB solves agent backend sprawl with distributed SQL on TiKV"
         section = self.good[self.good.index(h2):self.good.index("## Supabase alternative FAQs")]
-        self.assertIn("section_how_tidb_solves", failing(self.good.replace(section, section.replace("intro", "earlier")), self.ctx))
+        no_tie = section.replace(" Tie it back to the intro problem of every agent needing isolated state and vector memory.", "").replace(
+            "This heading closes the loop on the intro problem. ", "")
+        self.assertNotEqual(no_tie, section)
+        self.assertIn("section_how_tidb_solves", failing(self.good.replace(section, no_tie), self.ctx))
         h2 = "## How TiDB solves agent backend sprawl with distributed SQL on TiKV"
         section = self.good[self.good.index(h2):self.good.index("## Supabase alternative FAQs")]
         stripped = re.sub(r"(?i)TiKV|Raft|native VECTOR type|VECTOR", "the engine", section)

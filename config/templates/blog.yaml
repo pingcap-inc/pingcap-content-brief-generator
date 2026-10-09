@@ -18,7 +18,7 @@ sections:
   - (?i)^how (?:tidb|pingcap)\b
   requires_mechanism: true
   required_terms:
-  - (?i)\bintro
+  - '(?i)\bintro(?:duction)?\b|\bopening\b|\bloop\b|\bties? (?:\w+ )?back\b'
 - id: closing
   position: -2
   label: Closing section with the single primary CTA

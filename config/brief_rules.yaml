@@ -53,7 +53,7 @@ eeat:
   - id: expert_review
     all: ['(?i)expert review']
   - id: methodology_note
-    all: ['(?i)methodology', '(?i)rating', '(?i)pricing', '(?i)feature availability', '(?i)verif']
+    all: ['(?i)methodology', '(?i)verif']
 
 faq:
   min_questions: 4
@@ -169,10 +169,15 @@ brief_length:
     Schema Markup Recommendations: 90
     CTAs: 90
     Word Count Target: 60
-  outline_preamble_max_words: 300
+  outline_preamble_max_words: 280
   h1_max_words: 190
-  h2_max_words: 140
   faq_max_words: 180
+  # Body H2s share what the whole-brief cap leaves after every other section, so
+  # passing every section cap also passes the total. Bounds for that share:
+  h2_min_words: 70
+  h2_max_words: 140
+  # Stated in the prompt as the typical H2 size.
+  section_target_words: 90
 
 # Refresh mode (--refresh-url): labels follow the approved refresh briefs.
 refresh:

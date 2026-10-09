@@ -246,7 +246,8 @@ contain that evidence. Empty arrays or missing text mean evidence unavailable: s
 
 #### H1 introduction block
 
-Directly under the H1 (after its Target line), write:
+Directly under the H1, write its own line "Target: ~X–Y words" for the introduction
+(it counts toward the tier total), then:
 
 1. **{{key_takeaways.label}}**: {{key_takeaways.min_bullets}} to {{key_takeaways.max_bullets}} bullets,
    each {{key_takeaways.min_words}} to {{key_takeaways.max_words}} words, leading with the strongest insight.
@@ -330,7 +331,8 @@ the selected tier.
 **Rationale**: One sentence (at most 20 words) naming the query pattern this heading
 captures and why it matters for the buyer or for LLM entity association. Generic
 rationales ("improves SEO", "adds keyword") are not acceptable.
-**Inline Content Guidance**: 2 to 3 bullets, each at most 30 words: the argument to
+Keep each H2 block to about {{brief_length.section_target_words}} words in total.
+**Inline Content Guidance**: 2 to 3 bullets, each at most 20 words: the argument to
 make, the TiDB capability or proof point and named entities to use, and any data to
 find or table/diagram/code example to include. Internal links for this H2 go here as
 a bullet.

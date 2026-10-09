@@ -6,7 +6,7 @@ fails a check before proceeding. The generator re-checks most items in code.
 1.  The whole brief is at most {{brief_length.max_words}} words (fenced code excluded), and no
     section exceeds its cap. Bullets, not paragraphs; no rule restated twice.
 2.  Every H2 has a one-sentence Rationale (at most 20 words) and 2 to 3 guidance
-    bullets (each at most 30 words).
+    bullets (each at most 20 words); each H2 block is about {{brief_length.section_target_words}} words.
 3.  H3s are heading lines only, except FAQ answer bullets and template-required tables.
 4.  The brief contains NO standalone sections titled "Key Points to Cover",
     "Proof Points", "Data to Find", "Examples", "Visuals to Add",

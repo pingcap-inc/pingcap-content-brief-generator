@@ -634,6 +634,50 @@ def _replace_body(content, name, text):
     return content[:span[1]] + "\n" + text + "\n\n" + content[span[2]:]
 
 
+_TARGET = re.compile(r"(?mi)^\W*Target\W*:?\W*~?\s*([0-9][0-9,]*)\s*(?:[–-]\s*~?([0-9][0-9,]*))?")
+
+
+def _fill_word_budgets(content, plan):
+    """Write what the plan already knows: the Word Count Target section, and a missing
+    H1 Target line sized to what the H2 targets leave inside the tier."""
+    notes = []
+    if not {"minimum", "maximum"} <= set(plan):
+        return content, notes
+    low, high = plan["minimum"], plan["maximum"]
+    if plan.get("primary_keyword_msv") is not None and plan.get("tier") and "Word Count Target" in sections(content):
+        h, b, e = sections(content)["Word Count Target"]
+        # Only the section's own text; anything after a rule or heading is kept as is.
+        stop = re.search(r"(?m)^\s*(?:-{3,}|\*{3,}|_{3,}|#{1,6}\s)", content[b:e])
+        e = b + stop.start() if stop else e
+        sentences = re.split(r"(?<=[.!?])\s+", " ".join(content[b:e].replace("*", "").split()))
+        why = next((x for x in sentences if x and not re.match(r"(?i)\W*(?:primary keyword|msv|tier|target)\b", x)
+                    and len(x.split()) <= 30), "")
+        body = (f"Primary keyword MSV: {plan['primary_keyword_msv']:,}. Tier: {plan['tier']}. "
+                f"Target: {low:,}–{high:,} words. {why}").strip()
+        if body != " ".join(content[b:e].split()):
+            content = content[:b] + "\n" + body + "\n\n" + content[e:].lstrip("\n")
+    parts = outline_parts(content)
+    if parts and parts.get("h1"):
+        start, end = parts["h1"]
+        intro = re.split(r"(?m)^#{2,}\s", content[start:end].split("\n", 1)[-1], maxsplit=1)[0]
+        if not _TARGET.search(intro):
+            sums = [0, 0]
+            for _, s2, e2 in parts["h2s"]:
+                body = re.split(r"(?m)^#{3,}\s", content[s2:e2].split("\n", 1)[-1], maxsplit=1)[0]
+                m = _TARGET.search(body)
+                if m:
+                    a = int(m.group(1).replace(",", "")); b2 = int((m.group(2) or m.group(1)).replace(",", ""))
+                    sums[0] += a; sums[1] += b2
+            need, room = max(0, low - sums[0]), high - sums[1]
+            lo = min(max(need, 100), room)
+            hi = min(room, lo + 50)
+            if lo >= max(need, 40) and hi >= lo:
+                line_end = content.index("\n", start) + 1 if "\n" in content[start:end] else end
+                content = content[:line_end] + f"\nTarget: ~{lo}–{hi} words\n" + content[line_end:]
+                notes.append("Added the missing H1 Target line")
+    return content, notes
+
+
 def entity_list(content):
     cfg = rules()["supporting_keywords"]
     tag = re.compile(rf"\s*\(\s*{re.escape(cfg['entity_coverage_tag'])}\s*\)", re.I)
@@ -697,6 +741,9 @@ def apply_deterministic(content, ctx):
                 if corrected != body:
                     content=content[:start]+corrected+content[end:]
                     notes.append('Normalized the at-a-glance table columns')
+
+    content, more = _fill_word_budgets(content, ctx.get("plan") or {})
+    notes += more
 
     # Empty data: one line instead of an empty table.
     if ctx.get("backlinks_empty"):
@@ -1241,7 +1288,9 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
         questions.append(question)
         q = tokens(question)
         if q and not any(len(q & src) >= cfg["source_overlap"] * len(q) for src in sources):
-            problems.append(f"FAQ question not sourced from PAA or Relevant LLM Queries: {question!r}")
+            allowed = "; ".join((ctx.get("paa") or []) + split_cell(meta.get("Relevant LLM Queries", "")))
+            problems.append(f"FAQ question not sourced from PAA or Relevant LLM Queries: {question!r}. "
+                            f"Rephrase one of these instead: {allowed}")
         label = re.search(rf"(?mi)^\**{re.escape(cfg['answer_label'])}:?\**:?\s*$", blk)
         if not label:
             problems.append(f"FAQ {question!r} has no '{cfg['answer_label']}:' bullets")
@@ -1250,7 +1299,7 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
         for line in blk[label.end():].splitlines():
             if not line.strip():
                 continue
-            if re.match(r"^\s*(?:\*\*[^*]+:\*\*|#)", line):
+            if re.match(r"^\s*(?:\*\*[^*]+:\*\*|#|(?:-{3,}|\*{3,}|_{3,})\s*$)", line):
                 break
             answer.append(line)
         bullets = [l for l in answer if re.match(r"^\s*[-*]\s+\S", l)]
@@ -1403,12 +1452,18 @@ def _length_check(content, parts, found, template):
     caps = {index: spec.get("max_words") for spec in template.get("sections", [])
             for sid, index in found.items() if sid == spec["id"] and spec.get("max_words")}
     faq = found.get(template.get("faq_section"))
+    caps.setdefault(faq, cfg["faq_max_words"])
     outline = [(OUTLINE + "::preamble", parts["preamble"], cfg["outline_preamble_max_words"])]
     if parts.get("h1"):
         outline.append((OUTLINE + "::h1", parts["h1"], cfg["h1_max_words"]))
+    # Body H2s share what the total cap leaves, so the section caps never add up past it.
+    fixed = sum(sizes.values()) + sum(brief_words(content[s:e]) for _, (s, e), _ in outline)
+    fixed += sum(brief_words(content[s:e]) for i, (_, s, e) in enumerate(parts["h2s"]) if i in caps)
+    body = [i for i in range(len(parts["h2s"])) if i not in caps]
+    share = (cfg["max_words"] - fixed) // len(body) if body else cfg["h2_max_words"]
+    h2_cap = max(cfg["h2_min_words"], min(cfg["h2_max_words"], share))
     for i, (title, start, end) in enumerate(parts["h2s"]):
-        cap = caps.get(i) or (cfg["faq_max_words"] if i == faq else cfg["h2_max_words"])
-        outline.append((_section_unit(i), (start, end), cap))
+        outline.append((_section_unit(i), (start, end), caps.get(i) or h2_cap))
     for unit, (start, end), cap in outline:
         sizes[unit] = brief_words(content[start:end])
         if sizes[unit] > cap:

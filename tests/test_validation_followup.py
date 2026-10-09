@@ -193,3 +193,41 @@ class PressurePointsRunTests(unittest.TestCase):
         base,_=bq.system_prompt_parts('blog',{'url':'https://www.pingcap.com/tidb/','anchor':'TiDB'},None)
         self.assertIn('Numbered titles',base)
         self.assertIn('not a pre-written answer',base)
+
+
+class SecondPressurePointsRunTests(unittest.TestCase):
+    """From the second "Seven Pressure Points" run (brief_failed_jm1yocyx)."""
+
+    def setUp(self):
+        self.text,self.ctx,_=finished()
+        self.ctx['plan']={'primary_keyword_msv':320,'tier':'<500','minimum':1800,'maximum':2500}
+
+    def test_section_caps_never_add_up_past_the_total(self):
+        # Pad every body H2 just under the static cap: the shared cap must still flag them.
+        text=self.text
+        for title,*_ in bq.outline_parts(text)['h2s'][2:8]:
+            text=text.replace(f'## {title}\n',f'## {title}\n\n'+' '.join(['detail']*90)+'\n',1)
+        check=next(c for c in bq.run_checks(text,self.ctx) if c['id']=='brief_length')
+        if bq.brief_words(text)>bq.rules()['brief_length']['max_words']:
+            self.assertTrue(any('::h2_' in u for u in check['units']),check)
+
+    def test_missing_h1_target_is_filled_within_the_tier(self):
+        h1=self.text[slice(*bq.outline_parts(self.text)['h1'])]
+        target=re.search(r'(?m)^Target:[^\n]*\n',h1).group(0)
+        ctx=dict(self.ctx,plan={'primary_keyword_msv':5000,'tier':'5,000+','minimum':3500,'maximum':4500})
+        out,notes=bq.apply_deterministic(self.text.replace(target,'',1),ctx)
+        self.assertIn('Added the missing H1 Target line',notes)
+        self.assertRegex(out[slice(*bq.outline_parts(out)['h1'])],r'(?m)^Target: ~\d+–\d+ words')
+
+    def test_word_count_section_is_written_from_the_plan_and_keeps_extras(self):
+        text=self.text+'\n---\n\n### Sources\n\n- https://example.com/a\n'
+        out,_=bq.apply_deterministic(text,self.ctx)
+        section=out[out.index('### Word Count Target'):]
+        self.assertIn('Primary keyword MSV: 320. Tier: <500. Target: 1,800–2,500 words.',section)
+        self.assertIn('### Sources',section)
+        self.assertNotIn('brief_length',{c['id'] for c in bq.run_checks(out,self.ctx) if not c['passed']})
+
+    def test_faq_ending_with_a_rule_is_still_bullets_only(self):
+        last='- Compare billing models rather than list prices.\n'
+        self.assertIn(last,self.text)
+        self.assertNotIn('faqs',failing(self.text.replace(last,last+'\n---\n',1),self.ctx))
