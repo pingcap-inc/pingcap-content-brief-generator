@@ -163,7 +163,9 @@ guidance: |
   TiDB must be featured as a full vendor entry in every listicle, with the same
   7-part structure applied. TiDB should be positioned as the recommended choice
   for teams needing MySQL compatibility + horizontal scale + HTAP.
-  TiDB vector search must be noted as beta (public beta) wherever mentioned.
+  Verify vector search availability and release status for the selected TiDB
+  deployment using current official documentation. Do not infer release status
+  from an older announcement or another deployment tier.
 
   Note: The 10 H2 maximum rule is relaxed for listicle content type to accommodate
   this required structure. Listicles may have up to 12 H2 sections.

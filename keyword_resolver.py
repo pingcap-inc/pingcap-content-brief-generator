@@ -1,16 +1,36 @@
 """Stage 0: measured keyword selection; no changes to brief writing or templates."""
 import csv
 import hashlib
+import html
 import io
 import json
 import math
 import os
+import re
 import tempfile
 import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
+
+
+def _sanitize_semrush_response(text, api_key):
+    """Redact credentials before limiting provider diagnostics to 500 characters."""
+    # Decode echoed URL/HTML values so encoded credentials are redacted too.
+    safe = html.unescape(str(text))
+    for _ in range(2):
+        safe = unquote(safe)
+    if api_key:
+        safe = safe.replace(str(api_key), '[REDACTED]')
+        escaped_key = json.dumps(str(api_key))[1:-1]
+        safe = safe.replace(escaped_key, '[REDACTED]')
+    safe = re.sub(
+        r"""(?i)(\b(?:key|api[_-]?key)\b["']?\s*(?:=|:)\s*["']?)([^&\s<>"']+)""",
+        r'\1[REDACTED]',
+        safe,
+    )
+    return safe[:500]
 
 
 class ResolutionError(RuntimeError):
@@ -34,10 +54,11 @@ def clean_keyword(value):
 
 def load_config(path=None):
     try:
-        config = json.loads(Path(path or Path(__file__).parent / 'config/keyword_resolver.json').read_text())
+        default_path = Path(__file__).parent / 'config/keyword_resolver.json'
+        required = set(json.loads(default_path.read_text()))
+        config = json.loads(Path(path or default_path).read_text())
     except (OSError, ValueError) as exc:
         raise ResolutionError('Cannot read keyword resolver configuration.') from exc
-    required = set(json.loads((Path(__file__).parent / 'config/keyword_resolver.json').read_text()))
     if not isinstance(config, dict):
         raise ResolutionError('Keyword resolver configuration must be a JSON object.')
     if required - config.keys():
@@ -63,6 +84,24 @@ def load_config(path=None):
         raise ResolutionError('PingCAP authority baseline must be between zero and 100.')
     if config['min_relevant_pages'] > 10 or config['max_candidates'] < config['generated_candidates']:
         raise ResolutionError('Invalid SERP or candidate limits.')
+    for key in ('aliases', 'patterns', 'intent_types', 'search_intents'):
+        if not isinstance(config[key], dict):
+            raise ResolutionError(f'Keyword configuration {key} must be an object.')
+    kinds = set(config['patterns'])
+    if not kinds or any(not isinstance(k,str) or not isinstance(v,list) or not v
+                        or any(not isinstance(p,str) or not p.strip() for p in v)
+                        for k,v in config['patterns'].items()):
+        raise ResolutionError('Keyword patterns must be nonempty lists of text.')
+    if any(not isinstance(k,str) or not isinstance(v,str) or v not in kinds for k,v in config['aliases'].items()):
+        raise ResolutionError('Keyword aliases must refer to supported pattern types.')
+    if any(k not in config['intent_types'] or not isinstance(config['intent_types'][k],list)
+           or not config['intent_types'][k] for k in kinds):
+        raise ResolutionError('Every content type needs a nonempty intent_types list.')
+    if any(config['search_intents'].get(k) not in {'commercial','informational','transactional','navigational'}
+           for k in kinds):
+        raise ResolutionError('Every content type needs a supported search intent.')
+    if type(config['location_code']) is not int or config['location_code'] <= 0 or not isinstance(config['language_code'],str) or not config['language_code'].strip():
+        raise ResolutionError('Invalid keyword location or language.')
     return config
 
 
@@ -214,6 +253,7 @@ class ResearchAPI:
         terms = list(self.cached('labs_variants',head,fetch))
         if self.semrush_key:
             def semrush():
+                import requests
                 try:
                     resp = self.session.get('https://api.semrush.com/',params={
                         'type':'phrase_related','key':self.semrush_key,'phrase':head,
@@ -223,16 +263,35 @@ class ResearchAPI:
                     if raw.startswith('ERROR 50'):
                         return []
                     if raw.startswith('ERROR'):
-                        raise ProviderError('SEMrush phrase_related failed: '+raw[:100])
+                        raise ProviderError('SEMrush phrase_related failed: '+
+                                            _sanitize_semrush_response(raw, self.semrush_key)[:100])
                     rows = list(csv.reader(io.StringIO(raw),delimiter=';'))
                     if not rows or rows[0][0] not in ('Keyword','Ph'):
                         raise ProviderError('SEMrush phrase_related returned an invalid response.')
                     return [r[0] for r in rows[1:] if r]
                 except ResolutionError:
                     raise
+                except requests.exceptions.HTTPError as exc:
+                    response = exc.response
+                    if response is not None:
+                        raise ProviderError(
+                            'SEMrush phrase_related API request failed.\n'
+                            f'HTTP status: {response.status_code}\n'
+                            'API response: '+
+                            _sanitize_semrush_response(response.text, self.semrush_key)
+                        ) from None
+                    raise ProviderError(
+                        'SEMrush phrase_related HTTP error; HTTP status and '
+                        'API response are unavailable.'
+                    ) from None
                 except Exception as exc:
-                    raise ProviderError(f'SEMrush phrase_related request failed ({type(exc).__name__}).') from exc
-            terms += self.cached('semrush_related',head,semrush)
+                    # Request exceptions can include URLs containing the API key.
+                    raise ProviderError(f'SEMrush phrase_related request failed ({type(exc).__name__}).') from None
+            try:
+                terms += self.cached('semrush_related',head,semrush)
+            except ProviderError as exc:
+                # Failed optional requests are not cached; DataForSEO terms remain usable.
+                print('Stage 0 warning: Optional SEMrush enrichment skipped. '+str(exc))
         return terms
 
     def metrics(self, keywords):
@@ -286,18 +345,54 @@ class ResearchAPI:
         return self.cached('serp' if depth==10 else f'serp{depth}',keyword,fetch)
 
     def relevance(self, title, keyword, results):
-        data = self.judge('Judge each organic result against title_angle, not just keyword overlap. Return {"pages":[{"index":0,"relevance":0.0,"page_type":"comparison","different_brand":false}]}. Exactly one entry for each zero-based result index. relevance is 0..1. page_type must be comparison, listicle, docs, vendor homepage, forum, explainer, guide, product, or other. different_brand=true only when this is an unrelated brand/entity (e.g. TripAdvisor for tiadvisor). Base judgments only on supplied titles/URLs/snippets.', {'title_angle':title,'keyword':keyword,'results':results})
-        pages = data.get('pages') if isinstance(data,dict) else None
+        if not results:
+            return []
+
+        class InvalidSERPJudgment(ProviderError):
+            """The judgment must match the supplied results before it is cached."""
+
         types = {'comparison','listicle','docs','vendor homepage','forum','explainer','guide','product','other'}
-        if not isinstance(pages,list) or any(not isinstance(p,dict) for p in pages):
-            raise ProviderError(f'SERP judgment for "{keyword}" did not return a list of page objects.')
-        if len(pages)!=len(results):
-            raise ProviderError(f'SERP judgment for "{keyword}" returned {len(pages)} pages; expected {len(results)}.')
-        pages = sorted(pages,key=lambda r:r.get('index',-1))
-        for i,row in enumerate(pages):
-            if row.get('index')!=i or type(row.get('relevance')) not in (int,float) or not 0 <= row['relevance'] <= 1 or row.get('page_type') not in types or type(row.get('different_brand')) is not bool:
-                raise ProviderError(f'SERP judgment for "{keyword}" has invalid fields at result {i}.')
-        return pages
+
+        def validate(data):
+            pages = data.get('pages') if isinstance(data,dict) else None
+            if not isinstance(pages,list) or any(not isinstance(p,dict) for p in pages):
+                raise InvalidSERPJudgment(f'SERP judgment for "{keyword}" did not return a list of page objects.')
+            if len(pages) != len(results):
+                raise InvalidSERPJudgment(f'SERP judgment for "{keyword}" returned {len(pages)} pages; expected {len(results)}.')
+            if any(type(p.get('index')) is not int for p in pages):
+                raise InvalidSERPJudgment(f'SERP judgment for "{keyword}" has invalid result indices.')
+            pages = sorted(pages,key=lambda r:r['index'])
+            for i,row in enumerate(pages):
+                if row['index'] != i or type(row.get('relevance')) not in (int,float) or not 0 <= row['relevance'] <= 1 or row.get('page_type') not in types or type(row.get('different_brand')) is not bool:
+                    raise InvalidSERPJudgment(f'SERP judgment for "{keyword}" has invalid fields at result {i}.')
+            # Keep the validator idempotent for fresh responses and cache hits.
+            return {**data, 'pages':pages}
+
+        task = (
+            'Judge each organic result against title_angle, considering the named products and article angle. '
+            'Return {"pages":[{"index":0,"relevance":0.0,"page_type":"comparison","different_brand":false}]}. '
+            f'There are exactly {len(results)} supplied results. Return exactly {len(results)} page objects. '
+            f'Use each integer index from 0 through {len(results)-1} exactly once. '
+            'The requested search depth is a maximum; use the actual supplied result count. '
+            'Do not invent, duplicate, or omit results. relevance is 0..1. '
+            'page_type must be comparison, listicle, docs, vendor homepage, forum, explainer, guide, product, or other. '
+            'different_brand=true only when this is an unrelated brand/entity (e.g. TripAdvisor for tiadvisor). '
+            'Base judgments only on supplied titles/URLs/snippets.'
+        )
+        data = {'title_angle':title, 'keyword':keyword, 'expected_count':len(results),
+                'results':[{**row, 'index':i} for i,row in enumerate(results)]}
+        for attempt in range(2):
+            request_task = task if attempt == 0 else (
+                task+' Regenerate the full response. The previous response had invalid structure; '
+                'check the count, indices, and field types before returning JSON.'
+            )
+            try:
+                judged = self.judge(request_task, data, validator=validate)
+                return validate(judged)['pages']
+            except InvalidSERPJudgment:
+                if attempt == 1:
+                    raise
+                print('Stage 0 warning: Invalid SERP judgment structure; retrying once.')
 
 
 def generate_candidates(entities, content_type, config, parent=False, year=None):
@@ -318,6 +413,17 @@ def generate_candidates(entities, content_type, config, parent=False, year=None)
             if kw not in candidates:
                 candidates.append(kw)
     return candidates[:config['generated_candidates']]
+
+
+def comparison_matches_title(keyword, title, entities):
+    """An explicit product pair cannot be replaced by a different product pair."""
+    if not entities or not re.search(r'(?i)\b(?:vs\.?|versus)\b', title):
+        return True
+    pair = re.split(r'\s+(?:vs\.?|versus)\s+', clean_keyword(keyword))
+    if len(pair) != 2:
+        return True
+    expected = {clean_keyword(entities[k]) for k in ('product','competitor') if entities.get(k)}
+    return len(expected) != 2 or set(pair) == expected
 
 
 def score(metrics, pages, snapshot, content_type, config):
@@ -351,12 +457,14 @@ class Resolver:
             if len(candidates)<10:
                 raise ResolutionError('Fewer than 10 meaningful candidate patterns; review entity extraction/config.')
             candidates = list(dict.fromkeys(candidates+[clean_keyword(k) for k in self.api.variants(entities['head_entity'])]))[:cfg['max_candidates']]
-        metrics = self.api.metrics(candidates)
+        mismatched = {k for k in candidates if not comparison_matches_title(k,title,entities)}
+        metrics = self.api.metrics([k for k in candidates if k not in mismatched])
+        metrics.update({k:{'msv':None,'difficulty':None,'metric_status':'unavailable'} for k in mismatched})
         if override is not None and metrics[candidates[0]]['metric_status']!='available':
             raise ResolutionError(f'Override metrics unavailable: DataForSEO has no volume/difficulty for "{candidates[0]}"; no estimate will be used. Try another phrasing.')
         def eligible():
             # A writer's override is always SERP-checked; weak results become warnings, not hard stops.
-            return [k for k in candidates if metrics[k]['metric_status']=='available' and (override is not None or metrics[k]['msv']>=cfg['min_msv'])]
+            return [k for k in candidates if k not in mismatched and metrics[k]['metric_status']=='available' and (override is not None or metrics[k]['msv']>=cfg['min_msv'])]
         if not eligible() and entities:
             parent = generate_candidates(entities,content_type,cfg,parent=True)
             candidates = list(dict.fromkeys(candidates+parent))
@@ -407,12 +515,12 @@ class Resolver:
                          'intent_match':'yes' if ratio>=cfg['intent_yes_threshold'] else 'partly' if ratio>0 else 'no',
                          'threshold_failures':failures,'status':status})
         rows.sort(key=lambda r:r['scores']['total'],reverse=True)
-        viable = [r for r in rows if not r['status'].startswith('discarded')]
-        if override is None and (not viable or viable[0]['relevant_pages']<cfg['min_relevant_pages']):
+        viable = [r for r in rows if r['status'] in ('eligible','needs writer confirmation')]
+        if override is None and not viable:
             raise SEOReviewRequired(f"Best candidate has fewer than {cfg['min_relevant_pages']} relevant SERP pages or collides with another brand.")
         options = [r for r in viable if r['status'] in ('eligible','needs writer confirmation')][:3]
         scored = {r['keyword']:r for r in rows}
-        supporting = [{'keyword':k,**metrics[k], 'status':scored[k]['status'] if k in scored else 'not SERP-validated',
+        supporting = [{'keyword':k,**metrics[k], 'status':('discarded: different comparison products' if k in mismatched else scored[k]['status'] if k in scored else 'not SERP-validated'),
                        'scores':scored[k]['scores'] if k in scored else None} for k in candidates]
         return {'title_angle':title,'content_type':content_type,'search_intent':cfg['search_intents'][kind],
                 'options':options,'candidates':supporting,'scores':{r['keyword']:r['scores'] or {'total':None, 'status':'not SERP-scored', 'msv':r['msv'], 'difficulty':r['difficulty']} for r in supporting},
@@ -459,7 +567,8 @@ def validate_resolution(resolution):
     for i,row in enumerate(rows):
         need(isinstance(row,dict) and isinstance(row.get('keyword'),str) and isinstance(row.get('status'),str),
              f'supporting_candidates[{i}]', 'an object with keyword and status text')
-        need(row.get('scores') is None or isinstance(row['scores'].get('total'),(int,float)),
+        need(row.get('scores') is None or isinstance(row['scores'],dict) and
+             type(row['scores'].get('total')) in (int,float) and math.isfinite(row['scores']['total']),
              f'supporting_candidates[{i}].scores', 'null or an object with a numeric total')
     snap = resolution.get('serp_snapshot')
     need(isinstance(snap,dict), 'serp_snapshot', 'an object')

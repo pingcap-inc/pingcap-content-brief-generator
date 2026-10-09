@@ -452,9 +452,9 @@ class ProviderTests(unittest.TestCase):
             api.semrush_key='key'
             for text in ['ERROR 120 :: WRONG KEY','garbage']:
                 api.session.get.return_value=Mock(text=text)
-                with self.assertRaises(ProviderError):api.variants('head '+text)
+                self.assertEqual(api.variants('head '+text),[])
             api.session.get.side_effect=OSError('down')
-            with self.assertRaises(ProviderError):api.variants('head down')
+            self.assertEqual(api.variants('head down'),[])
             api.session.get.side_effect=None
             api.session.get.return_value=Mock(text='ERROR 50 :: NOTHING FOUND')
             self.assertEqual(api.variants('head nothing'),[])

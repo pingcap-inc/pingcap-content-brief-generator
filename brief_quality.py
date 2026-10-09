@@ -379,6 +379,8 @@ def match_template_sections(titles, template):
 
 
 def competitor_name(content, ctx):
+    if ctx.get('competitor'):
+        return ctx['competitor']
     parts = outline_parts(content)
     template = template_for(ctx["content_type"])
     if parts:
@@ -531,7 +533,7 @@ def _mark_competitor_claims(content, ctx):
         for i, line in enumerate(lines):
             sources = section_id != "pricing" and re.match(r"(?i)^\W*sources?\b", line)
             for url in reversed(list(re.finditer(r"https?://[^\s)\]>|]*[^\s)\]>|.,;:]", line))):
-                if (urlparse(url.group(0)).hostname or "").endswith("pingcap.com"):
+                if _pingcap_url(url.group(0)):
                     continue
                 before = line[:url.start()]
                 claim = before[max(before.rfind(". "), 0):]
@@ -546,7 +548,12 @@ def _mark_competitor_claims(content, ctx):
 
 def _external_urls(text):
     return [u for u in re.findall(r"https?://[^\s)\]>|]+", text)
-            if not (urlparse(u).hostname or "").endswith("pingcap.com")]
+            if not _pingcap_url(u)]
+
+
+def _pingcap_url(url):
+    host = (urlparse(url).hostname or '').casefold()
+    return host == 'pingcap.com' or host.endswith('.pingcap.com')
 
 
 # ── Checks ───────────────────────────────────────────────────────────────────
@@ -618,6 +625,11 @@ def run_checks(content, ctx, structural_errors=()):
     names = [name.casefold() for name, *_ in entity_list(content)]
     checks.append(_check("entity_dedupe", [f"Duplicate entity: {n}" for n in set(names) if names.count(n) > 1],
                          ["Meta Elements"]))
+    checks.append(_check('entity_count', [] if 10 <= len(names) <= 15 else
+                         [f'Entity Recognition Focus has {len(names)} entities; expected 10-15'], ['Meta Elements']))
+    queries = split_cell(meta.get('Relevant LLM Queries', ''))
+    checks.append(_check('llm_query_count', [] if 4 <= len(queries) <= 5 else
+                         [f'Relevant LLM Queries has {len(queries)} queries; expected 4-5'], ['Meta Elements']))
 
     # 3. SERP section.
     s = cfg["serp"]
@@ -639,6 +651,11 @@ def run_checks(content, ctx, structural_errors=()):
 
     # 4. Key Takeaways and E-E-A-T.
     h1 = content[parts["h1"][0]:parts["h1"][1]] if parts["h1"] else ""
+    h1_titles = [line[2:].strip().strip('*') for line in h1.splitlines() if line.startswith('# ')]
+    expected_h1 = ' '.join(resolution['title_angle'].split()).casefold()
+    checks.append(_check('article_title', [] if len(h1_titles) == 1 and
+                         ' '.join(h1_titles[0].split()).casefold() == expected_h1 else
+                         ['Article H1 must preserve the supplied title angle'], [OUTLINE+'::h1']))
     checks.append(_check("key_takeaways", _takeaway_problems(h1), [OUTLINE + "::h1"]))
     problems = [f"Intro guidance is missing the {group['id'].replace('_', ' ')} requirement"
                 for group in cfg["eeat"] if not all(re.search(p, h1) for p in group["all"])]
@@ -687,6 +704,10 @@ def run_checks(content, ctx, structural_errors=()):
     checks.append(_check("no_invented_ratings", rating,
                          [unit_at(content, mt.start()) for p in cfg["reviews"]["invented_rating_patterns"]
                           for mt in re.finditer(p, content)]))
+    schema_span = sections(content).get('Schema Markup Recommendations')
+    schema_text = content[schema_span[1]:schema_span[2]] if schema_span else ''
+    checks.append(_check('schema_types', ['ComparisonTable is not a Schema.org type; use documented schema types.']
+                         if re.search(r'\bComparisonTable\b',schema_text) else [], ['Schema Markup Recommendations']))
 
     # 6. CTA.
     checks.append(_cta_check(content, ctx, parts, found, template))
@@ -762,6 +783,8 @@ def _glance_problems(text, spec, competitor):
         problems.append("At-a-glance columns must be " + " | ".join(c.replace("{competitor}", "[Competitor]") for c in spec["columns"]))
     elif re.fullmatch(r"(?i)\[?competitor\]?", header[1].strip("*")):
         problems.append("At-a-glance column 2 must name the competitor")
+    elif competitor and header[1].strip('*').casefold() != competitor.casefold():
+        problems.append(f'At-a-glance competitor must be {competitor!r}, not {header[1]!r}')
     if not spec["min_rows"] <= len(data) <= spec["max_rows"]:
         problems.append(f"At-a-glance table has {len(data)} rows; allowed {spec['min_rows']}-{spec['max_rows']}")
     categories = [r[0] for r in data if r]
@@ -769,7 +792,9 @@ def _glance_problems(text, spec, competitor):
         if not any(re.search(cat["match"], c) for c in categories):
             problems.append(f"At-a-glance table is missing the {cat['label']} row")
     for row in data:
-        if len(row) >= 2 and re.fullmatch(spec["empty_cell_pattern"], row[1].strip("* ").casefold()):
+        if len(row) != len(expected):
+            problems.append('Every at-a-glance row must have all required columns')
+        elif re.fullmatch(spec["empty_cell_pattern"], row[1].strip("* ").casefold()):
             problems.append(f"Competitor cell is empty for {row[0]!r}; describe the competitor's capability")
     if spec.get("requires_sources"):
         marker = rules()["claims"]["verify_marker"]
@@ -803,7 +828,7 @@ def _pricing_problems(text, competitor):
             continue
         about_tidb = re.search(r"\bTiDB\b", line) and not (competitor and competitor.casefold() in line.casefold())
         if about_tidb:
-            if not re.search(r"https?://(?:www\.)?pingcap\.com\S*", line):
+            if not any(_pingcap_url(u) for u in re.findall(r"https?://[^\s)\]>|]+",line)):
                 problems.append("TiDB price without a pingcap.com source; describe the billing model instead: " + line.strip()[:80])
             continue
         if not _external_urls(line):
@@ -1115,8 +1140,8 @@ def repair_plan(checks):
 def repair_prompt(content, plan):
     spans = unit_spans(content)
     parts = ["The brief below failed automated checks. Rewrite ONLY the listed units so "
-             "every violation is fixed, keeping everything else about each unit (headings, "
-             "Target lines, structure) unchanged. Follow all original rules.",
+             "every violation is fixed. Correct headings, Target lines, or structure when "
+             "a listed violation requires it. Preserve unrelated content. Follow all original rules.",
              "Return each unit exactly in this form and nothing else:\n<<<UNIT id>>>\n"
              "...full replacement text...\n<<<END UNIT>>>"]
     for unit, problems in plan.items():

@@ -3,19 +3,21 @@
 .env
 token.json
 credentials.json
-.folder\_id
+.folder_id
+.env.*
+!.env.example
 
 # Python
 
-**pycache**/
-\*.pyc
-\*.pyo
-\*.pyd
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 .Python
-\*.egg-info/
+*.egg-info/
 dist/
 build/
-\*.egg
+*.egg
 .eggs/
 .venv/
 venv/
@@ -23,12 +25,12 @@ env/
 
 # OS
 
-.DS\_Store
+.DS_Store
 Thumbs.db
 
 # Output files
 
-brief\_\*.md
+brief_*.md
 
 
 # Stage 0 response cache and per-run confirmation records
