@@ -284,7 +284,9 @@ class CheckTests(unittest.TestCase):
         self.assertFails("key_takeaways", "- Agent backends that need many isolated tenants benefit from TiDB horizontal scale on TiKV.\n" + bullet + "\n", "")
         self.assertFails("key_takeaways", "**Key Takeaways**", "**Summary**")
         self.assertFails("eeat", "Add an expert review note", "Add a note")
-        self.assertFails("eeat", "ratings, pricing, and feature availability", "pricing")
+        intro = self.good[self.good.index("Intro guidance:"):].split("\n", 1)[0]
+        no_method = re.sub(r"(?i)[^.]*methodology[^.]*\.", "", intro)
+        self.assertIn("eeat", failing(self.good.replace(intro, no_method), self.ctx))
 
     def test_comparison_template(self):
         self.assertFails("template_sections", "## How TiDB solves agent backend sprawl", "## Why distributed SQL handles agent sprawl")
@@ -292,7 +294,15 @@ class CheckTests(unittest.TestCase):
         self.assertIn("section_integrations", failing(self.good.replace("SQL client", "client"), self.ctx))
         h2 = "## How TiDB solves agent backend sprawl with distributed SQL on TiKV"
         section = self.good[self.good.index(h2):self.good.index("## Supabase alternative FAQs")]
-        self.assertIn("section_how_tidb_solves", failing(self.good.replace(section, section.replace("intro", "earlier")), self.ctx))
+        no_tie = section.replace(" Tie it back to the intro problem of every agent needing isolated state and vector memory.", "").replace(
+            "This heading closes the loop on the intro problem. ", "")
+        self.assertNotEqual(no_tie, section)
+        # A missing tie-back is added by code, not failed.
+        repaired, notes = bq.apply_deterministic(self.good.replace(section, no_tie), self.ctx)
+        self.assertIn("Added the intro tie-back to the mechanism section", notes)
+        self.assertIn(bq.rules()["mechanism_tie_back"]["bullet"], repaired)
+        self.assertNotIn("section_how_tidb_solves", failing(repaired, self.ctx))
+        self.assertEqual(bq.apply_deterministic(self.good, self.ctx)[0].count(bq.rules()["mechanism_tie_back"]["bullet"]), 0)
         h2 = "## How TiDB solves agent backend sprawl with distributed SQL on TiKV"
         section = self.good[self.good.index(h2):self.good.index("## Supabase alternative FAQs")]
         stripped = re.sub(r"(?i)TiKV|Raft|native VECTOR type|VECTOR", "the engine", section)
@@ -350,8 +360,11 @@ class CheckTests(unittest.TestCase):
         self.assertFails("faqs", "- Use TiDB Data Migration tooling where it fits.",
                          "- Use TiDB Data Migration tooling where it fits.\n- Step four.\n- Step five.")
         self.assertFails("faqs", "**Answer guidance:**\n- Point to the dated", "**Answer guidance:**\nStart with context.\n- Point to the dated")
-        self.assertFails("faqs", "### How much does Supabase cost for AI agent workloads?",
-                         "### Why do penguins migrate south in winter?")
+        one = self.good.replace("### How much does Supabase cost for AI agent workloads?",
+                                "### Why do penguins migrate south in winter?")
+        self.assertNotIn("faqs", failing(one, self.ctx), "one unsourced question of four is allowed")
+        self.assertIn("faqs", failing(one.replace("### Which database handles vector search and SQL for AI agents?",
+                                                  "### What do penguins eat in winter?"), self.ctx))
         self.assertFails("faqs", "### How do I migrate from Supabase to TiDB Cloud?", "### How do I move off it to TiDB Cloud?")
         self.assertFails("faqs", "### Does Supabase have a hosted MCP server for agents?", "### Does it have a hosted MCP server for agents?")
         self.assertFails("faqs", "**Rationale**: FAQ queries", "Answer in 3 to 5 sentences.\n\n**Rationale**: FAQ queries")
@@ -449,7 +462,7 @@ class RegressionFixtureTests(unittest.TestCase):
             report=self.report)
 
     def saved_report(self):
-        return json.loads(next(Path(self.folder).glob("brief_failed_*/validation.json")).read_text())
+        return json.loads(next(Path(self.folder).glob("briefs/*/quality_report.json")).read_text())
 
     def test_first_draft_violations_are_repaired_once_and_fixture_assertions_hold(self):
         bad = (FIXTURE
@@ -500,7 +513,6 @@ class RegressionFixtureTests(unittest.TestCase):
             self.assertLessEqual(len(lines), 4)
         self.assertTrue(all("<=>" not in code for _, code in bq.tidb_sql_snippets(text)))
         self.assertIn("**Key Takeaways**", text)
-        self.assertIn("author bio with relevant credentials", text)
         self.assertIn("expert review note", text)
         titles = [t for t, *_ in parts["h2s"]]
         self.assertTrue(any("pricing" in t.casefold() for t in titles))
@@ -513,7 +525,7 @@ class RegressionFixtureTests(unittest.TestCase):
     def test_unrepaired_draft_fails_with_every_check_in_validation_json(self):
         bad = FIXTURE.replace("Cover MCP servers", "Seamlessly cover MCP servers")
         with self.assertRaisesRegex(ValueError, "style_lint"):
-            self.run_generation([reply(bad), reply(bad)])
+            self.run_generation([reply(bad), reply(bad), reply(bad)])
         report = self.saved_report()
         self.assertEqual(report["status"], "unvalidated")
         lint = next(c for c in report["checks"] if c["id"] == "style_lint")

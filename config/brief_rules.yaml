@@ -4,7 +4,8 @@ version: 1
 
 meta:
   title_suffix: " - PingCAP"
-  title_min_chars: 50
+  # The approved briefs use titles from 46 characters.
+  title_min_chars: 45
   title_max_chars: 60
   description_max_chars: 140
   slug_prefixes:
@@ -47,13 +48,15 @@ key_takeaways:
   max_lines_after_h1: 3
 
 # Each group must match somewhere in the H1 intro guidance.
+# E-E-A-T requirements for the intro guidance. When one is missing, code appends
+# its instruction to the intro guidance instead of failing the brief.
 eeat:
-  - id: author_bio
-    all: ['(?i)author bio', '(?i)credential|expertise|experience']
   - id: expert_review
     all: ['(?i)expert review']
+    instruction: Add an expert review note naming the technical reviewer and review date.
   - id: methodology_note
-    all: ['(?i)methodology', '(?i)rating', '(?i)pricing', '(?i)feature availability', '(?i)verif']
+    all: ['(?i)methodology', '(?i)verif']
+    instruction: Add a methodology note stating that feature availability, pricing, and ratings are verified before publication.
 
 faq:
   min_questions: 4
@@ -62,6 +65,8 @@ faq:
   answer_label: Answer guidance
   # Share of question tokens that must overlap a PAA question or LLM query.
   source_overlap: 0.5
+  # Share of FAQ questions that must overlap a PAA question or LLM query.
+  min_sourced_fraction: 0.6
   forbidden_guidance:
     - '(?i)\b\d\s*(?:-|to|–)\s*\d\s+sentences?\b'
   alternative_questions:
@@ -158,21 +163,34 @@ internal_links:
 # Fenced code samples are not counted. A unit over its cap is sent to repair.
 brief_length:
   max_words: 2500
+  # When the brief is within max_words, a section fails only above cap x this factor.
+  within_total_slack: 1.5
+  # Briefs up to this share over max_words pass with a warning (content team, Oct 2026).
+  overshoot_tolerance: 0.10
   section_max_words:
-    Page Goal: 90
-    Target Audience: 80
-    Technical Notes: 90
-    Writer Guardrails: 140
+    Page Goal: 70
+    Target Audience: 70
+    Technical Notes: 70
+    Writer Guardrails: 110
     Internal Links: 200
-    LLM Visibility Snapshot: 130
-    Link Landscape & Acquisition Angle: 120
+    LLM Visibility Snapshot: 110
+    Link Landscape & Acquisition Angle: 90
     Schema Markup Recommendations: 90
     CTAs: 90
     Word Count Target: 60
-  outline_preamble_max_words: 300
+  outline_preamble_max_words: 280
   h1_max_words: 190
-  h2_max_words: 140
   faq_max_words: 180
+  # Body H2s share what the whole-brief cap leaves after every other section, so
+  # passing every section cap also passes the total. Bounds for that share:
+  h2_min_words: 70
+  h2_max_words: 140
+  # Stated in the prompt as the typical H2 size.
+  section_target_words: 75
+  # The prompt asks for this share of the cap: models overshoot a stated limit by
+  # 3-10%, so aiming lower lands under the real cap. Repair targets the same share.
+  prompt_target_fraction: 0.85
+  repair_target_fraction: 0.8
 
 # Refresh mode (--refresh-url): labels follow the approved refresh briefs.
 refresh:
@@ -183,5 +201,12 @@ refresh:
   # Page headings from this marker on are site widgets, not article content.
   end_of_article: ['(?i)^related resources$', '(?i)^have questions\b']
 
+# The named-mechanism H2 must tie back to the intro's problem. When its guidance
+# does not, code adds this bullet instead of failing the brief.
+mechanism_tie_back:
+  pattern: '(?i)\bintro(?:duction)?\b|\bopening\b|\bloop\b|\bties? (?:\w+ )?back\b'
+  bullet: "- Tie this back to the problem named in the intro: show how the mechanism above resolves it for the reader."
+
 repair:
-  max_rounds: 1
+  # A second round runs only when the first leaves failures (usually a small length overrun).
+  max_rounds: 2

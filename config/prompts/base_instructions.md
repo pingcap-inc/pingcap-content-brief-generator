@@ -4,9 +4,9 @@ transactional and analytical processing (HTAP) workloads at massive scale.
 
 Your task: produce a fully populated PingCAP content brief in Markdown.
 The brief is a scannable plan the writer expands, not a pre-written article.
-The whole brief must stay under {{brief_length.max_words}} words, whatever the
-article length or content type: the approved PingCAP sample briefs run 1,500 to
-2,500 words. Prefer short bullets over paragraphs, never restate a rule in two
+Aim for about {{brief_length.target_words}} words for the whole brief, whatever the
+article length; the hard maximum is {{brief_length.max_words}} words and briefs over it
+are rejected. The approved PingCAP sample briefs run 1,500 to 2,500 words. Prefer short bullets over paragraphs, never restate a rule in two
 places, and never pre-write article copy except the Key Takeaways. The generator
 counts words per section and rejects overlong sections. Reference examples, when
 supplied, show entity specificity; the explicit output format and rules below
@@ -63,7 +63,7 @@ rejects any value outside these limits.
 
 ### Page Goal
 
-Write 2 to 3 sentences describing what the reader should believe after
+Write 2 sentences describing what the reader should believe after
 reading, what action they should take, and how this content strengthens
 TiDB/PingCAP's entity association in LLMs and search engines for the target
 keyword cluster. Put role, company type, evaluation stage, and decision driver
@@ -73,7 +73,7 @@ only in the separate Target Audience section.
 
 ### Target Audience
 
-  Write a focused 2 to 3 sentence paragraph that names:
+  Write a focused 2-sentence paragraph that names:
   - The specific job titles or roles (e.g. "Senior engineers, platform architects, and database leads")
   - The company type and scale (e.g. "at high-growth SaaS companies, fintech platforms, or AI-native startups")
   - The evaluation stage they are at (e.g. "who are actively evaluating distributed SQL solutions after hitting MySQL scaling limits")
@@ -109,12 +109,13 @@ this content type, chosen from:
 ### Writer Guardrails
 
 These are mandatory editorial standards the writer must follow before publication:
-- **Benchmark data**: Must include year, test conditions, and verifiable source. Drop any benchmark that cannot be attributed; do not use unverifiable speed claims.
-- **Pricing claims**: Competitor numbers only with a source URL and year, marked "{{claims.verify_marker}}". For TiDB, describe the billing model unless public numbers are verifiable.
-- **Review ratings**: Never invent ratings. The writer captures the score, review count, and retrieval date from the exact G2, Capterra, or Clutch page.
-- **Internal links**: Use only verified pingcap.com URLs. Do not guess or invent paths.
-- **Competitor claims**: Any limitation attributed to a competitor must be factual and attributable, with no editorialising. Describe competitor strengths too.
-- **Product positioning**: Avoid generic product praise. Ground all TiDB positioning in specific capabilities, architecture facts, or customer proof points.
+Write these six items as given (one short line each):
+- **Benchmark data**: Include year, test conditions, and source, or drop the benchmark.
+- **Pricing claims**: Competitor numbers need a source URL and year, marked "{{claims.verify_marker}}"; describe TiDB's billing model.
+- **Review ratings**: Never invent ratings; capture score, review count, and retrieval date from the exact page.
+- **Internal links**: Use only verified pingcap.com URLs.
+- **Competitor claims**: Keep limitations factual and attributable; describe competitor strengths too.
+- **Product positioning**: Ground TiDB claims in specific capabilities, architecture, or customer proof.
 
 ---
 
@@ -158,7 +159,7 @@ or a guarantee of AI inclusion, featured snippets, or schema rich-result eligibi
 
 Using the available evidence, produce:
 
-Every bullet is one sentence.
+Every bullet is one sentence of at most 20 words.
 
 - **AI Search Presence**: How many AI-generated responses mention this topic area,
   and which platforms surface results (Google AI Overviews, ChatGPT, etc.)
@@ -186,7 +187,7 @@ Using the backlinks data provided, produce:
 - **Competitor Backlink Comparison Table**: A table showing each competitor URL
   analyzed, their referring domains count, total backlinks, domain rank, and
   dofollow/nofollow ratio.
-- **Anchor Text and Acquisition**: At most 2 one-sentence bullets: the dominant
+- **Anchor Text and Acquisition**: At most 2 bullets of at most 20 words: the dominant
   anchor-text pattern and the most specific link acquisition strategy for this page.
 - **Difficulty Flag**: If any competitor has 500+ referring domains, flag this
   as a high-competition topic and note that link building will require sustained
@@ -246,16 +247,17 @@ contain that evidence. Empty arrays or missing text mean evidence unavailable: s
 
 #### H1 introduction block
 
-Directly under the H1 (after its Target line), write:
+Directly under the H1, write its own line "Target: ~X–Y words" for the introduction
+(it counts toward the tier total), then:
 
 1. **{{key_takeaways.label}}**: {{key_takeaways.min_bullets}} to {{key_takeaways.max_bullets}} bullets,
    each {{key_takeaways.min_words}} to {{key_takeaways.max_words}} words, leading with the strongest insight.
    These bullets are copy the writer publishes, so follow the house style exactly.
 2. Intro guidance for the writer in at most 4 sentences. It asks for a 40 to 60 word
    answer-first opening that defines the topic and uses the primary keyword once,
-   plus a visible updated month and year, author role, reviewer credential, and
-   review date. It must also include these E-E-A-T requirements:
-   - an author bio with relevant credentials (name the kind of expertise needed)
+   plus a visible updated month and year and review date. The author is not known
+   when the brief is written, so do not ask for an author bio. It must include these
+   E-E-A-T requirements:
    - an expert review note (who reviews the piece technically before publication)
    - a methodology note stating that ratings, pricing, and feature availability
      must be verified before publication
@@ -330,7 +332,8 @@ the selected tier.
 **Rationale**: One sentence (at most 20 words) naming the query pattern this heading
 captures and why it matters for the buyer or for LLM entity association. Generic
 rationales ("improves SEO", "adds keyword") are not acceptable.
-**Inline Content Guidance**: 2 to 3 bullets, each at most 30 words: the argument to
+Keep each H2 block to about {{brief_length.section_target_words}} words in total.
+**Inline Content Guidance**: 2 to 3 bullets, each at most 20 words: the argument to
 make, the TiDB capability or proof point and named entities to use, and any data to
 find or table/diagram/code example to include. Internal links for this H2 go here as
 a bullet.
@@ -381,7 +384,7 @@ The {{word_count.ceiling}} word ceiling is absolute.
 
 ## Absolute Rules: Violations Will Invalidate the Brief
 
-1. The whole brief is at most {{brief_length.max_words}} words. H3s are heading lines only.
+1. The whole brief is about {{brief_length.target_words}} words (hard maximum {{brief_length.max_words}}). H3s are heading lines only.
 2. Every H2 has a Target line, a one-sentence Rationale, and 2 to 3 guidance bullets.
 3. All inline writer guidance goes INSIDE the relevant outline section only.
 4. Do NOT include any of these as standalone top-level sections:
@@ -392,7 +395,7 @@ The {{word_count.ceiling}} word ceiling is absolute.
 6. No unverified performance claims or superlatives without cited evidence.
 7. Heading hierarchy must be strictly H1 -> H2 -> H3 with no skips. No visual notes,
    no Visual Recommendations summary.
-8. Maximum 10 H2 sections, except listicles which allow up to 12.
+8. Maximum 10 H2 sections, except listicles and blogs, which allow up to 12.
 9. The page-type template's required H2s are all present, in its order.
 10. The Writer Guardrails section must appear in every brief with all six items.
 11. Word Count Target must state the MSV value, its tier, the resulting range, and a

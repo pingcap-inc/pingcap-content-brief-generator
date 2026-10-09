@@ -21,7 +21,13 @@ Runs required Stage 0 keyword resolution and confirmation, followed by the exist
 Outputs a structured content brief to:
 
 - Google Docs (saved to a "Content Briefs" Drive folder)
-- Local .md file (always saved before Google Docs export)
+- Local .md file (always saved before Google Docs export), in one folder per run:
+  `briefs/<title> [<content type>] v1`, `v2`, ... for reruns of the same title and type
+- Briefs that fail a check are still uploaded to the same Drive folder as
+  `[UNVALIDATED] Content Brief: ...`, with the failed checks listed at the top, and
+  kept locally in the run folder. Set `DRIVE_FOLDER_ID` in `.env` to pin the folder.
+- Length: briefs aim for about 85% of the cap (2,500 words; 2,800 for listicles).
+  Up to 10% over the cap passes with a warning; beyond that the brief fails.
 
 ## Content types
 
@@ -145,13 +151,13 @@ Rules, templates and lists live in `config/`, not in code:
    one primary CTA, internal links (priority, required, section relevance), case
    studies, FAQs, style lint (em dashes, banned words, TiDB superlatives), product
    facts, TiDB SQL `<=>` misuse (parsed with sqlglot), empty data, word count, and
-   brief length: the brief itself stays at or under 2,500 words for every content type
+   brief length: the brief itself stays at or under 2,500 words (2,800 for listicles)
    (per-section caps in `brief_length` in `config/brief_rules.yaml`; fenced code excluded).
 3. **One repair round.** Failing sections are regenerated once, alone, and spliced
    back. If anything still fails, the brief is rejected.
 
 Every check is written to `validation.json` with `passed` and `details`, both for
-rejected drafts (`brief_failed_*/`) and successful runs (`brief_run_*/`). Fewer than
+rejected drafts and successful runs, in the run folder `briefs/<title> [<type>] vN/`. Fewer than
 five relevant pages in the top-20 SERP rejects the run before the paid generation call.
 
 ## Internal-link inventory
@@ -236,7 +242,7 @@ Before export, structural validation checks section order, H2 limits,
 at-a-glance placement (second H2 for comparisons and listicles), word budgets, visual-line presence, metadata lengths, URL
 structure, and supplied internal-link URLs and placements. Truncated responses or
 validation failures stop the run with an error after preserving `draft.md`,
-`validation.json`, and `research.md` in a unique local `brief_failed_*` folder.
+`quality_report.json`, and `research.md` in the run folder (`briefs/<title> [<type>] vN`).
 Brief generation defaults to 16,000 output tokens; override with a positive integer
 in `ANTHROPIC_MAX_TOKENS` in your local `.env` (title generation remains at 50).
 Known outline formatting variants (`## H1:` and a visual-summary heading) are
@@ -343,9 +349,9 @@ run-output directories are ignored by Git. Paid API calls still occur on misses.
 The generated Markdown/Google Doc begins with the confirmed keyword, name/time,
 selection source, whether an override was confirmed below threshold (and which
 checks failed), runner-up scores and acknowledged warnings. The same resolution
-object is saved immediately to `brief_run_*/validation.json`, then marked validated
-on success; failed brief validation also includes it in the existing
-`brief_failed_*/validation.json`. Keep the ordinary brief-generation and validation
+object is saved immediately to `briefs/<title> [<type>] vN/validation.json`, then marked
+validated on success; a failed brief adds `draft.md`, `research.md` and
+`quality_report.json` to the same folder. Keep the ordinary brief-generation and validation
 rules unchanged: Stage 0 adds keyword selection and audit metadata only.
 
 Run all tests with `python3 -m unittest discover -s tests -v`. The browser-script
@@ -393,7 +399,7 @@ Only files in docs/examples/ and root files named example_* or sample_* are
 loaded as reference briefs. The README and generated briefs are excluded.
 Place reviewed reference briefs in docs/examples/ to use them as examples.
 
-Validated Markdown is saved inside a unique brief_run_* directory so rerunning
-the same title does not overwrite earlier output. A validated status means the
+Validated Markdown is saved inside the run folder; reruns of the same title and type
+get the next version (v2, v3, ...), so earlier output is never overwritten. A validated status means the
 automated checks passed. Human editorial and source verification is still needed.
 Drafts and research are preserved if validation or a repair request fails.

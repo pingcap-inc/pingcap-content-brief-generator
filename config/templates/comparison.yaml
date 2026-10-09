@@ -78,7 +78,6 @@ sections:
     label: How TiDB solves [problem named in the intro]
     match: ['(?i)^how tidb solves\b']
     requires_mechanism: true
-    required_terms: ['(?i)\bintro']
   - id: faqs
     position: -2
     label: FAQs

@@ -191,6 +191,7 @@ class PipelineTests(unittest.TestCase):
                             'get_semrush_keyword_intent':{}, 'get_semrush_related_keywords':[],
                             'get_semrush_keyword_gap':[], 'get_semrush_domain_authority':[],
                             'generate_brief':'Draft', 'summarize_title':'Title', 'create_google_doc':'https://example.com/doc',
+                            'drive_doc_title':'Content Brief: Title [comparison]', 'upload_unvalidated_draft':None,
                             'print_cost_summary':None}.items():
             ns[name]=Mock(return_value=value)
         ns['get_keyword_data'].side_effect=lambda kw:events.append(('research',kw)) or []
@@ -208,7 +209,7 @@ class PipelineTests(unittest.TestCase):
             old=os.getcwd()
             try:
                 os.chdir(d); ns['main']()
-                report=json.loads(next(Path(d).glob('brief_run_*/validation.json')).read_text())
+                report=json.loads(next(Path(d).glob('briefs/*/validation.json')).read_text())
             finally: os.chdir(old)
         self.assertEqual([e[0] for e in events],['confirmed','research'])
         for name in ['get_llm_mentions','get_semrush_keyword_intent','get_semrush_related_keywords','get_semrush_keyword_gap']:

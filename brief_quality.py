@@ -6,6 +6,7 @@ be computed (slug, target keyword, intent, supporting keywords, Total MSV, empty
 notes, CTA pruning, claim markers) is set here and then checked like everything else.
 """
 import json
+import os
 import re
 from html.parser import HTMLParser
 from functools import lru_cache
@@ -93,6 +94,23 @@ def slugify(keyword):
 def page_url(content_type, keyword):
     prefixes = rules()["meta"]["slug_prefixes"]
     return prefixes.get(content_type, prefixes["default"]) + slugify(keyword)
+
+
+def run_folder(title, content_type, root):
+    """A readable, versioned local folder per run: "<title> [<type>] v<n>" under root."""
+    os.makedirs(root, exist_ok=True)
+    safe = " ".join(re.sub(r'[\\/:*?"<>|]+', " ", title).split())[:80] or "Untitled"
+    base = f"{safe} [{content_type}]"
+    taken = [int(m.group(1)) for name in os.listdir(root)
+             if (m := re.fullmatch(re.escape(base) + r" v(\d+)", name))]
+    version = max(taken, default=0) + 1
+    while True:
+        path = os.path.join(root, f"{base} v{version}")
+        try:
+            os.makedirs(path)
+            return path
+        except FileExistsError:
+            version += 1
 
 
 def target_url(ctx, keyword):
@@ -389,6 +407,9 @@ def prompt_values(content_type, priority_link, competitor=None):
               "style": {**cfg["style"], "banned_list": ", ".join(
                   f'"{p["id"]}"' for p in cfg["style"]["banned_phrases"])},
               "word_count": {**cfg["word_count"], "table": "\n".join(table)},
+              "brief_length": {**cfg["brief_length"], "max_words": max_brief_words(template),
+                               "target_words": int(max_brief_words(template)
+                                                   * cfg["brief_length"]["prompt_target_fraction"]) // 50 * 50},
               "faq": {**cfg["faq"], "alternative_rule": alt_rule},
               "mechanisms": ", ".join(template.get("mechanisms") or [
                   "Raft consensus", "Multi-Raft", "TiKV", "TiFlash", "PD placement driver",
@@ -634,6 +655,131 @@ def _replace_body(content, name, text):
     return content[:span[1]] + "\n" + text + "\n\n" + content[span[2]:]
 
 
+_TARGET = re.compile(r"(?mi)^\W*Target\W*:?\W*~?\s*([0-9][0-9,]*)\s*(?:[–-]\s*~?([0-9][0-9,]*))?")
+
+
+def _add_eeat(content):
+    """Append any missing E-E-A-T instruction to the H1 intro guidance."""
+    parts = outline_parts(content)
+    if not parts or not parts.get("h1"):
+        return content, []
+    start, end = parts["h1"]
+    block = content[start:end]
+    missing = [g for g in rules()["eeat"] if not all(re.search(p, block) for p in g["all"])]
+    if not missing:
+        return content, []
+    addition = " ".join(g["instruction"] for g in missing)
+    line = re.search(r"(?mi)^.*intro guidance.*$", block)
+    if line:
+        at = start + line.end()
+        content = content[:at] + " " + addition + content[at:]
+    else:
+        at = start + len(block.rstrip().rstrip("-").rstrip())
+        content = content[:at] + "\n\n**Intro guidance:** " + addition + content[at:]
+    return content, [f"Added missing E-E-A-T instructions: {', '.join(g['id'] for g in missing)}"]
+
+
+def _add_mechanism_tie_back(content, template):
+    """The mechanism H2 must point the writer back to the intro's problem; add the
+    instruction when the model's guidance does not already say so."""
+    cfg = rules()["mechanism_tie_back"]
+    parts = outline_parts(content)
+    index = match_template_sections([t for t, *_ in parts["h2s"]], template).get(template.get("mechanism_section"))
+    if index is None:
+        return content, []
+    _, start, end = parts["h2s"][index]
+    block = content[start:end]
+    sub = re.search(r"(?m)^#{3,}\s", block)
+    own = block[:sub.start()] if sub else block
+    if re.search(cfg["pattern"], own):
+        return content, []
+    bullets = list(re.finditer(r"(?m)^[ \t]*[-*][ \t]+\S.*$", own))
+    at = start + (bullets[-1].end() if bullets else len(own.rstrip()))
+    content = content[:at] + "\n" + cfg["bullet"] + content[at:]
+    return content, ["Added the intro tie-back to the mechanism section"]
+
+
+def _fill_word_budgets(content, plan):
+    """Write what the plan already knows: the Word Count Target section, and a missing
+    H1 Target line sized to what the H2 targets leave inside the tier."""
+    notes = []
+    if not {"minimum", "maximum"} <= set(plan):
+        return content, notes
+    low, high = plan["minimum"], plan["maximum"]
+    if plan.get("primary_keyword_msv") is not None and plan.get("tier") and "Word Count Target" in sections(content):
+        h, b, e = sections(content)["Word Count Target"]
+        # Only the section's own text; anything after a rule or heading is kept as is.
+        stop = re.search(r"(?m)^\s*(?:-{3,}|\*{3,}|_{3,}|#{1,6}\s)", content[b:e])
+        e = b + stop.start() if stop else e
+        sentences = re.split(r"(?<=[.!?])\s+", " ".join(content[b:e].replace("*", "").split()))
+        why = next((x for x in sentences if x and not re.match(r"(?i)\W*(?:primary keyword|msv|tier|target)\b", x)
+                    and len(x.split()) <= 30), "")
+        body = (f"Primary keyword MSV: {plan['primary_keyword_msv']:,}. Tier: {plan['tier']}. "
+                f"Target: {low:,}–{high:,} words. {why}").strip()
+        if body != " ".join(content[b:e].split()):
+            content = content[:b] + "\n" + body + "\n\n" + content[e:].lstrip("\n")
+    parts = outline_parts(content)
+    if parts and parts.get("h1"):
+        start, end = parts["h1"]
+        intro = re.split(r"(?m)^#{2,}\s", content[start:end].split("\n", 1)[-1], maxsplit=1)[0]
+        if not _TARGET.search(intro):
+            sums = [0, 0]
+            for _, s2, e2 in parts["h2s"]:
+                body = re.split(r"(?m)^#{3,}\s", content[s2:e2].split("\n", 1)[-1], maxsplit=1)[0]
+                m = _TARGET.search(body)
+                if m:
+                    a = int(m.group(1).replace(",", "")); b2 = int((m.group(2) or m.group(1)).replace(",", ""))
+                    sums[0] += a; sums[1] += b2
+            need, room = max(0, low - sums[0]), high - sums[1]
+            lo = min(max(need, 100), room)
+            hi = min(room, lo + 50)
+            if lo >= max(need, 40) and hi >= lo:
+                line_end = content.index("\n", start) + 1 if "\n" in content[start:end] else end
+                content = content[:line_end] + f"\nTarget: ~{lo}–{hi} words\n" + content[line_end:]
+                notes.append("Added the missing H1 Target line")
+    return _fit_targets_to_tier(content, low, high, notes)
+
+
+def _fit_targets_to_tier(content, low, high, notes):
+    """Scale the H1 and H2 Target ranges proportionally when their sums miss the tier."""
+    parts = outline_parts(content)
+    if not parts:
+        return content, notes
+    found = []
+    for start, end in ([parts["h1"]] if parts.get("h1") else []) + [(s2, e2) for _, s2, e2 in parts["h2s"]]:
+        head_end = content.index("\n", start) + 1 if "\n" in content[start:end] else end
+        nxt = re.search(r"(?m)^#{1,6}\s", content[head_end:end])
+        m = _TARGET.search(content, head_end, head_end + nxt.start() if nxt else end)
+        if m:
+            a = int(m.group(1).replace(",", "")); b = int((m.group(2) or m.group(1)).replace(",", ""))
+            found.append((m, a, b))
+    if not found:
+        return content, notes
+    sum_lo, sum_hi = sum(a for _, a, _ in found), sum(b for _, _, b in found)
+    if sum_lo >= low and sum_hi <= high:
+        return content, notes
+    hi_f = min(1.0, high / sum_hi) if sum_hi else 1.0
+    lo_f = max(1.0, low / sum_lo) if sum_lo else 1.0
+    # Shrink upper bounds down (floor) and raise lower bounds up (ceil), in steps of 5.
+    new = []
+    for m, a, b in found:
+        b2 = int(b * hi_f) // 5 * 5
+        a2 = -(-int(a * lo_f + 0.999) // 5) * 5
+        a2 = min(a2, b2) if b2 else a2
+        new.append((m, a2, max(a2, b2)))
+    if sum(a for _, a, _ in new) < low or sum(b for _, _, b in new) > high:
+        return content, notes
+    for m, a, b in sorted(new, key=lambda x: x[0].start(), reverse=True):
+        # Replace only the numbers, keeping the line's own formatting.
+        if m.group(2):
+            content = content[:m.start(2)] + str(b) + content[m.end(2):]
+            content = content[:m.start(1)] + str(a) + content[m.end(1):]
+        else:
+            content = content[:m.start(1)] + f"{a}–{b}" + content[m.end(1):]
+    notes.append(f"Scaled section Target ranges to fit the {low:,}–{high:,} word tier")
+    return content, notes
+
+
 def entity_list(content):
     cfg = rules()["supporting_keywords"]
     tag = re.compile(rf"\s*\(\s*{re.escape(cfg['entity_coverage_tag'])}\s*\)", re.I)
@@ -659,6 +805,14 @@ def apply_deterministic(content, ctx):
         if corrected != original:
             content = content[:start]+corrected+content[end:]
             notes.append('Restored the supplied article H1')
+
+    # Meta Title: no year (models add one to pad the length, sometimes the wrong year).
+    title = meta_cells(content).get("Meta Title", "")
+    clean = re.sub(r"\s*\(?\b(?:in\s+|for\s+)?20\d\d\b\)?:?", "", title)
+    clean = re.sub(r"\s{2,}", " ", clean).replace(" -  ", " - ").strip()
+    if clean != title:
+        content = _set_meta_row(content, "Meta Title", clean)
+        notes.append("Removed the year from the Meta Title")
 
     # Meta: values the model must not choose.
     entities = entity_list(content)
@@ -697,6 +851,13 @@ def apply_deterministic(content, ctx):
                 if corrected != body:
                     content=content[:start]+corrected+content[end:]
                     notes.append('Normalized the at-a-glance table columns')
+        content, more = _add_mechanism_tie_back(content, template)
+        notes += more
+        content, more = _add_eeat(content)
+        notes += more
+
+    content, more = _fill_word_budgets(content, ctx.get("plan") or {})
+    notes += more
 
     # Empty data: one line instead of an empty table.
     if ctx.get("backlinks_empty"):
@@ -706,6 +867,12 @@ def apply_deterministic(content, ctx):
         content = _replace_body(content, "LLM Visibility Snapshot", cfg["empty_data"]["llm_mentions"])
         notes.append("LLM mentions empty: section replaced with the unavailable-data note")
 
+    # "(verify URL before including)" notes are placeholders, not guidance; drop them.
+    stripped = re.sub(r"[ \t]*\([^()\n]*\bverify (?:the )?url\b[^()\n]*\)", "", content, flags=re.I)
+    if stripped != content:
+        content = stripped
+        notes.append("Removed 'verify URL' placeholder notes")
+
     # CTAs: drop any non-primary CTA line whose URL cannot be verified or that is a placeholder.
     verifier = ctx.get("url_verifier") or (lambda url: False)
     placeholders = [re.compile(p) for p in cfg["cta"]["forbidden_placeholders"]]
@@ -713,7 +880,7 @@ def apply_deterministic(content, ctx):
     for line in content.splitlines(keepends=True):
         is_cta = re.search(r"(?i)\bcta\b", line) and cfg["cta"]["primary_label"].casefold() not in line.casefold()
         urls = re.findall(r"https?://[^\s)\]>|]+", line)
-        bad_url = [u for u in urls if u.rstrip(".,") != ctx["priority_link"]["url"] and not verifier(u.rstrip(".,"))]
+        bad_url = [u for u in urls if u.rstrip(".,;:)") != ctx["priority_link"]["url"] and not verifier(u.rstrip(".,;:)"))]
         if is_cta and (bad_url or any(p.search(line) for p in placeholders)):
             notes.append("Dropped unverifiable CTA: " + line.strip()[:120])
             continue
@@ -1211,7 +1378,7 @@ def _case_study_check(content, ctx):
             problems.append(f"Anonymized customer example: {mt.group(0)!r}")
             units.append(unit_at(content, mt.start()))
     for mt in re.finditer(r"https?://(?:www\.)?pingcap\.com/case-stud(?:y|ies)/[^\s)\]|>]+", content):
-        if mt.group(0).rstrip(".,") not in allowed and not mt.group(0).rstrip("/").endswith("/case-studies"):
+        if mt.group(0).rstrip(".,;:)") not in allowed and not mt.group(0).rstrip("/").endswith("/case-studies"):
             problems.append(f"Case-study URL not in the customer roster: {mt.group(0)}")
             units.append(unit_at(content, mt.start()))
     for offset, line, *_ in _lines(content):
@@ -1235,13 +1402,13 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
     if not cfg["min_questions"] <= len(blocks) <= cfg["max_questions"]:
         problems.append(f"FAQ has {len(blocks)} questions; allowed {cfg['min_questions']}-{cfg['max_questions']}")
     sources = [tokens(q) for q in (ctx.get("paa") or []) + split_cell(meta.get("Relevant LLM Queries", ""))]
-    questions = []
+    questions, unsourced = [], []
     for blk in blocks:
         question = blk.splitlines()[0].strip().strip("*")
         questions.append(question)
         q = tokens(question)
         if q and not any(len(q & src) >= cfg["source_overlap"] * len(q) for src in sources):
-            problems.append(f"FAQ question not sourced from PAA or Relevant LLM Queries: {question!r}")
+            unsourced.append(question)
         label = re.search(rf"(?mi)^\**{re.escape(cfg['answer_label'])}:?\**:?\s*$", blk)
         if not label:
             problems.append(f"FAQ {question!r} has no '{cfg['answer_label']}:' bullets")
@@ -1250,7 +1417,7 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
         for line in blk[label.end():].splitlines():
             if not line.strip():
                 continue
-            if re.match(r"^\s*(?:\*\*[^*]+:\*\*|#)", line):
+            if re.match(r"^\s*(?:\*\*[^*]+:\*\*|#|(?:-{3,}|\*{3,}|_{3,})\s*$)", line):
                 break
             answer.append(line)
         bullets = [l for l in answer if re.match(r"^\s*[-*]\s+\S", l)]
@@ -1258,6 +1425,13 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
             problems.append(f"FAQ {question!r} answer guidance must be bullet points only")
         if not 1 <= len(bullets) <= cfg["max_bullets"]:
             problems.append(f"FAQ {question!r} has {len(bullets)} answer bullets; allowed 1-{cfg['max_bullets']}")
+    # Most questions come from PAA or the LLM queries; the approved briefs add a few of their own.
+    if blocks and len(blocks) - len(unsourced) < cfg["min_sourced_fraction"] * len(blocks):
+        allowed = "; ".join((ctx.get("paa") or []) + split_cell(meta.get("Relevant LLM Queries", "")))
+        problems.append(f"Too few FAQ questions come from PAA or Relevant LLM Queries "
+                        f"({len(blocks) - len(unsourced)} of {len(blocks)}; at least "
+                        f"{cfg['min_sourced_fraction']:.0%}). Unsourced: {'; '.join(unsourced)}. "
+                        f"Rephrase from these instead: {allowed}")
     problems += [f"FAQ guidance uses a prose-length instruction ({p})" for p in cfg["forbidden_guidance"]
                  if re.search(p, text)]
     if ctx["content_type"] == "alternative" or "alternative" in ctx["resolution"]["primary_keyword"].casefold():
@@ -1275,6 +1449,9 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
 def _lint_check(content):
     cfg = rules()["style"]
     problems, units = [], []
+    # URLs are page addresses, not copy: a verified slug may contain a banned word.
+    # Blank them out, keeping offsets so units still map to the right section.
+    content = re.sub(r"https?://[^\s)\]>|]+", lambda m: " " * len(m.group(0)), content)
     for char, name in cfg["forbidden_characters"].items():
         for mt in re.finditer(re.escape(char), content):
             line_end = content.find("\n", mt.start())
@@ -1389,39 +1566,64 @@ def brief_words(text):
     return len(plain_words(re.sub(r"(?ms)^```.*?^```", "", text)))
 
 
+def max_brief_words(template):
+    """The whole-brief cap: the template's own (listicles) or the global one."""
+    return template.get("max_brief_words") or rules()["brief_length"]["max_words"]
+
+
 def _length_check(content, parts, found, template):
-    cfg = rules()["brief_length"]
+    cfg = {**rules()["brief_length"], "max_words": max_brief_words(template)}
     problems, units, sizes = [], [], {}
+    total = brief_words(content)
+    # Up to overshoot_tolerance over the cap passes with a warning; beyond it fails.
+    hard = int(cfg["max_words"] * (1 + cfg["overshoot_tolerance"]))
+    over = total > hard
+    # The section caps exist to keep the total under the limit. Within it, a section
+    # fails only when it is badly oversized; over it, every cap is strict.
+    slack = 1.0 if over else cfg["within_total_slack"]
     for name, (head, body, end) in sections(content).items():
         if name == OUTLINE:
             continue
         sizes[name] = brief_words(content[body:end])
         cap = cfg["section_max_words"].get(name)
-        if cap and sizes[name] > cap:
-            problems.append(f"{name} is {sizes[name]} words; maximum {cap}")
+        if cap and sizes[name] > cap * slack:
+            problems.append(f"{name} is {sizes[name]} words; maximum {cap}. "
+                            f"Rewrite it to about {int(cap * cfg['repair_target_fraction'])} words")
             units.append(name)
     caps = {index: spec.get("max_words") for spec in template.get("sections", [])
             for sid, index in found.items() if sid == spec["id"] and spec.get("max_words")}
     faq = found.get(template.get("faq_section"))
+    caps.setdefault(faq, cfg["faq_max_words"])
     outline = [(OUTLINE + "::preamble", parts["preamble"], cfg["outline_preamble_max_words"])]
     if parts.get("h1"):
         outline.append((OUTLINE + "::h1", parts["h1"], cfg["h1_max_words"]))
+    # Body H2s share what the total cap leaves, so the section caps never add up past it.
+    fixed = sum(sizes.values()) + sum(brief_words(content[s:e]) for _, (s, e), _ in outline)
+    fixed += sum(brief_words(content[s:e]) for i, (_, s, e) in enumerate(parts["h2s"]) if i in caps)
+    body = [i for i in range(len(parts["h2s"])) if i not in caps]
+    share = (cfg["max_words"] - fixed) // len(body) if body else cfg["h2_max_words"]
+    h2_cap = max(cfg["h2_min_words"], min(cfg["h2_max_words"], share)) if over else cfg["h2_max_words"]
     for i, (title, start, end) in enumerate(parts["h2s"]):
-        cap = caps.get(i) or (cfg["faq_max_words"] if i == faq else cfg["h2_max_words"])
-        outline.append((_section_unit(i), (start, end), cap))
+        outline.append((_section_unit(i), (start, end), caps.get(i) or h2_cap))
     for unit, (start, end), cap in outline:
         sizes[unit] = brief_words(content[start:end])
-        if sizes[unit] > cap:
+        if sizes[unit] > cap * slack:
             problems.append(f"{unit.split('::')[-1]} is {sizes[unit]} words; maximum {cap}. "
-                            "Keep a Target line, a one-sentence rationale, and 2 to 3 short guidance bullets; H3s are heading lines")
+                            f"Rewrite it to about {int(cap * cfg['repair_target_fraction'])} words: a Target line, "
+                            "a one-sentence rationale, and 2 to 3 short guidance bullets; H3s are heading lines")
             units.append(unit)
-    total = brief_words(content)
-    if total > cfg["max_words"]:
-        problems.append(f"Brief is {total} words; maximum {cfg['max_words']}. Shorten the longest sections")
+    if over:
+        problems.append(f"Brief is {total} words; maximum {hard} ({cfg['max_words']} plus "
+                        f"{cfg['overshoot_tolerance']:.0%}). Shorten the longest sections "
+                        f"so the brief lands near {int(cfg['max_words'] * cfg['repair_target_fraction'])} words")
         # Without a per-unit overrun, shorten the three longest units.
         if not units:
             units = sorted(sizes, key=sizes.get, reverse=True)[:3]
-    return _check("brief_length", problems, units)
+    check = _check("brief_length", problems, units)
+    if not over and total > cfg["max_words"]:
+        check["warnings"] = [f"Brief is {total} words, {total / cfg['max_words'] - 1:.0%} over the "
+                             f"{cfg['max_words']}-word target (within the {cfg['overshoot_tolerance']:.0%} tolerance)"]
+    return check
 
 
 def failures(checks):
@@ -1441,6 +1643,10 @@ def repair_plan(checks):
     if OUTLINE in plan:
         for unit in [u for u in plan if u.startswith(OUTLINE + "::")]:
             plan[OUTLINE].extend(plan.pop(unit))
+        # A rewritten outline can add, drop, or reorder H2s; re-place the links with it.
+        plan.setdefault("Internal Links", []).append(
+            "The outline is being rewritten: re-check every row's h2_N against the new outline "
+            "so each link sits in an H2 whose topic it supports")
     return {unit: dedupe(v) for unit, v in plan.items()}
 
 
