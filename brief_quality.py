@@ -389,6 +389,7 @@ def prompt_values(content_type, priority_link, competitor=None):
               "style": {**cfg["style"], "banned_list": ", ".join(
                   f'"{p["id"]}"' for p in cfg["style"]["banned_phrases"])},
               "word_count": {**cfg["word_count"], "table": "\n".join(table)},
+              "brief_length": {**cfg["brief_length"], "max_words": max_brief_words(template)},
               "faq": {**cfg["faq"], "alternative_rule": alt_rule},
               "mechanisms": ", ".join(template.get("mechanisms") or [
                   "Raft consensus", "Multi-Raft", "TiKV", "TiFlash", "PD placement driver",
@@ -1536,8 +1537,13 @@ def brief_words(text):
     return len(plain_words(re.sub(r"(?ms)^```.*?^```", "", text)))
 
 
+def max_brief_words(template):
+    """The whole-brief cap: the template's own (listicles) or the global one."""
+    return template.get("max_brief_words") or rules()["brief_length"]["max_words"]
+
+
 def _length_check(content, parts, found, template):
-    cfg = rules()["brief_length"]
+    cfg = {**rules()["brief_length"], "max_words": max_brief_words(template)}
     problems, units, sizes = [], [], {}
     total = brief_words(content)
     # The section caps exist to keep the total under the limit. Within the total, a

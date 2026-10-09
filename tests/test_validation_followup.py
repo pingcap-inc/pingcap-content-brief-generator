@@ -147,7 +147,7 @@ class BriefLengthTests(unittest.TestCase):
     def test_prompt_states_the_cap(self):
         for content_type in ['comparison','listicle','solution','blog']:
             base,checklist=bq.system_prompt_parts(content_type,{'url':'https://www.pingcap.com/ai/','anchor':'AI'},'Supabase')
-            self.assertIn('2500 words',base)
+            self.assertIn(f"{bq.max_brief_words(bq.template_for(content_type))} words",base)
             self.assertNotIn('at least 50%',base+checklist)
             self.assertNotIn('and a Visual line',checklist)
 
@@ -322,3 +322,18 @@ class MultiTenantListicleRunTests(unittest.TestCase):
         out,notes=bq.apply_deterministic(text.replace(title,'Supabase Alternative for AI Agent Backends 2025 - PingCAP'),ctx)
         self.assertEqual(bq.meta_cells(out)['Meta Title'],title)
         self.assertIn('Removed the year from the Meta Title',notes)
+
+
+class ListicleCapTests(unittest.TestCase):
+    """Listicles get a 2,800-word cap (user decision); other types stay at 2,500."""
+
+    def test_caps_by_type(self):
+        self.assertEqual(bq.max_brief_words(bq.template_for('listicle')),2800)
+        for t in ('comparison','blog','solution','product'):
+            self.assertEqual(bq.max_brief_words(bq.template_for(t)),2500)
+
+    def test_prompt_states_the_type_cap(self):
+        base,_=bq.system_prompt_parts('listicle',{'url':'https://www.pingcap.com/ai/','anchor':'AI'},None)
+        self.assertIn('2800 words',base)
+        base,_=bq.system_prompt_parts('blog',{'url':'https://www.pingcap.com/ai/','anchor':'AI'},None)
+        self.assertIn('2500 words',base)

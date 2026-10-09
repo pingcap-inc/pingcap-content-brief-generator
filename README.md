@@ -145,7 +145,7 @@ Rules, templates and lists live in `config/`, not in code:
    one primary CTA, internal links (priority, required, section relevance), case
    studies, FAQs, style lint (em dashes, banned words, TiDB superlatives), product
    facts, TiDB SQL `<=>` misuse (parsed with sqlglot), empty data, word count, and
-   brief length: the brief itself stays at or under 2,500 words for every content type
+   brief length: the brief itself stays at or under 2,500 words (2,800 for listicles)
    (per-section caps in `brief_length` in `config/brief_rules.yaml`; fenced code excluded).
 3. **One repair round.** Failing sections are regenerated once, alone, and spliced
    back. If anything still fails, the brief is rejected.

@@ -4,6 +4,8 @@
 content_types:
 - listicle
 max_h2: 12
+# Twelve H2s plus the generator's extra sections need more room than other types.
+max_brief_words: 2800
 faq_section: faqs
 primary_cta_section: closing_cta
 mechanism_section: tidb_spotlight
