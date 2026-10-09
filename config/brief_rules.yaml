@@ -160,6 +160,8 @@ internal_links:
 # Fenced code samples are not counted. A unit over its cap is sent to repair.
 brief_length:
   max_words: 2500
+  # When the brief is within max_words, a section fails only above cap x this factor.
+  within_total_slack: 1.5
   section_max_words:
     Page Goal: 90
     Target Audience: 80

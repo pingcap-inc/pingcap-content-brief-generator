@@ -1447,8 +1447,9 @@ def _length_check(content, parts, found, template):
     cfg = rules()["brief_length"]
     problems, units, sizes = [], [], {}
     total = brief_words(content)
-    # Within the total, small overruns do not matter; over it, every cap is strict.
-    slack = 1.0 if total > cfg["max_words"] else 1.1
+    # The section caps exist to keep the total under the limit. Within the total, a
+    # section fails only when it is badly oversized; over it, every cap is strict.
+    slack = 1.0 if total > cfg["max_words"] else cfg["within_total_slack"]
     for name, (head, body, end) in sections(content).items():
         if name == OUTLINE:
             continue

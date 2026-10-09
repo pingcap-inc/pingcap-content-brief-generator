@@ -245,3 +245,21 @@ class ThirdPressurePointsRunTests(unittest.TestCase):
                               'units':['Outline / Headings']}])
         self.assertIn('Internal Links',plan)
         self.assertIn('Outline / Headings',plan)
+
+
+class ScalabilityExplainedRunTests(unittest.TestCase):
+    """From "Database Scalability Explained" (brief_failed_i_95v1lj): 2,399 words, failed on two small overruns."""
+
+    def test_small_section_overrun_passes_when_total_fits(self):
+        text,ctx,_=finished()
+        padded=text.replace('**Visual:** Table: billing model comparison.',
+                            ' '.join(['note']*30)+'\n\n**Visual:** Table: billing model comparison.')
+        self.assertLessEqual(bq.brief_words(padded),bq.rules()['brief_length']['max_words'])
+        self.assertNotIn('brief_length',failing(padded,ctx))
+
+    def test_badly_oversized_section_still_fails_when_total_fits(self):
+        text,ctx,_=finished()
+        padded=text.replace('**Visual:** Table: billing model comparison.',
+                            ' '.join(['note']*200)+'\n\n**Visual:** Table: billing model comparison.')
+        self.assertLessEqual(bq.brief_words(padded),bq.rules()['brief_length']['max_words'])
+        self.assertIn('brief_length',failing(padded,ctx))
