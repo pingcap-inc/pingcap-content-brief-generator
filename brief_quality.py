@@ -383,14 +383,63 @@ def competitor_name(content, ctx):
         return ctx['competitor']
     parts = outline_parts(content)
     template = template_for(ctx["content_type"])
-    if parts:
+    spec = glance_spec(template)
+    if parts and spec:
         index = match_template_sections([t for t, *_ in parts["h2s"]], template).get("at_a_glance")
         if index is not None:
             _, start, end = parts["h2s"][index]
             rows = table_rows(content[start:end])
-            if rows and len(rows[0]) >= 2 and rows[0][0].casefold() == "category":
-                return rows[0][1].strip("*")
+            column = spec["columns"].index("{competitor}")
+            header = [_header_key(c) for c in rows[0]] if rows else []
+            if len(header) > column and header[0] == spec["columns"][0].casefold():
+                # The competitor is whichever product column is not TiDB.
+                others = [rows[0][i].strip("*") for i, key in enumerate(header[1:], 1) if key != "tidb"]
+                if others:
+                    return others[0]
     return ctx.get("competitor")
+
+
+# Header labels models use for the same at-a-glance column.
+_HEADER_SYNONYMS = {"category": "criteria", "tidb product": "tidb"}
+
+
+def _header_key(cell):
+    key = " ".join(cell.strip("* ").split()).casefold()
+    return _HEADER_SYNONYMS.get(key, key)
+
+
+def glance_spec(template):
+    return next((s["table"] for s in template.get("sections", []) if s["id"] == "at_a_glance" and s.get("table")), None)
+
+
+def _cells(line):
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def normalize_glance_table(body, spec, competitor):
+    """Rename synonymous header labels and reorder columns to the template order."""
+    expected = [c.replace("{competitor}", competitor) for c in spec["columns"]]
+    lines = body.splitlines(keepends=True)
+    start = next((i for i, l in enumerate(lines) if l.lstrip().startswith("|")), None)
+    if start is None:
+        return body
+    keys = [_header_key(c) for c in _cells(lines[start])]
+    wanted = [e.casefold() for e in expected]
+    if sorted(keys) != sorted(wanted):
+        return body
+    order = [keys.index(w) for w in wanted]
+    if [c.strip("* ") for c in _cells(lines[start])] == expected:
+        return body
+    lines[start] = "| " + " | ".join(expected) + " |\n"
+    if order == list(range(len(order))):
+        return "".join(lines)
+    for i in range(start + 1, len(lines)):
+        if not lines[i].lstrip().startswith("|"):
+            break
+        cells = _cells(lines[i])
+        if len(cells) == len(order):
+            lines[i] = "| " + " | ".join(cells[j] for j in order) + " |\n"
+    return "".join(lines)
 
 
 # ── Deterministic post-processing ────────────────────────────────────────────
@@ -473,17 +522,16 @@ def apply_deterministic(content, ctx):
     parts = outline_parts(content)
     if parts:
         found = match_template_sections([title for title,*_ in parts['h2s']],template)
-        if 'at_a_glance' in found:
+        spec = glance_spec(template)
+        if 'at_a_glance' in found and spec:
             _,start,end = parts['h2s'][found['at_a_glance']]
             body = content[start:end]
             expected = ctx.get('competitor') or competitor_name(content,ctx)
-            def table_header(match):
-                return '| Category | '+expected+' | TiDB product | Best fit |'
             if expected:
-                corrected = re.sub(r'(?m)^\|\s*Category\s*\|\s*'+re.escape(expected)+r'\s*\|\s*TiDB\s*\|\s*Best fit\s*\|\s*$',table_header,body)
+                corrected = normalize_glance_table(body,spec,expected)
                 if corrected != body:
                     content=content[:start]+corrected+content[end:]
-                    notes.append('Normalized the TiDB comparison column label')
+                    notes.append('Normalized the at-a-glance table columns')
 
     # Empty data: one line instead of an empty table.
     if ctx.get("backlinks_empty"):
@@ -805,13 +853,14 @@ def _glance_problems(text, spec, competitor):
     header, data = rows[0], rows[1:]
     problems = []
     expected = [c.replace("{competitor}", "*") for c in spec["columns"]]
+    ci = spec["columns"].index("{competitor}")
     if len(header) != len(expected) or any(e != "*" and h.strip("*").casefold() != e.casefold()
                                            for h, e in zip(header, expected)):
         problems.append("At-a-glance columns must be " + " | ".join(c.replace("{competitor}", competitor or "[Competitor]") for c in spec["columns"]))
-    elif re.fullmatch(r"(?i)\[?competitor\]?", header[1].strip("*")):
-        problems.append("At-a-glance column 2 must name the competitor")
-    elif competitor and header[1].strip('*').casefold() != competitor.casefold():
-        problems.append(f'At-a-glance competitor must be {competitor!r}, not {header[1]!r}')
+    elif re.fullmatch(r"(?i)\[?competitor\]?", header[ci].strip("*")):
+        problems.append(f"At-a-glance column {ci + 1} must name the competitor")
+    elif competitor and header[ci].strip('*').casefold() != competitor.casefold():
+        problems.append(f'At-a-glance competitor must be {competitor!r}, not {header[ci]!r}')
     if not spec["min_rows"] <= len(data) <= spec["max_rows"]:
         problems.append(f"At-a-glance table has {len(data)} rows; allowed {spec['min_rows']}-{spec['max_rows']}")
     categories = [r[0] for r in data if r]
@@ -822,9 +871,9 @@ def _glance_problems(text, spec, competitor):
         if len(row) != len(expected):
             problems.append('Every at-a-glance row must have all required columns')
         elif competitor and competitor.casefold() == 'mariadb' and re.search(r'(?i)vector',row[0]) and re.search(
-                r'(?i)\b(?:no|without|lacks?|does not (?:have|support))\b.{0,50}\b(?:native|vector)',row[1]) and not re.search(r'\b(?:10|11)\.\d+',row[1]):
+                r'(?i)\b(?:no|without|lacks?|does not (?:have|support))\b.{0,50}\b(?:native|vector)',row[ci]) and not re.search(r'\b(?:10|11)\.\d+',row[ci]):
             problems.append('MariaDB has a native VECTOR type from 11.7.1. State the version and check https://mariadb.com/docs/server/reference/sql-structure/vectors/vector before comparing vector support.')
-        elif re.fullmatch(spec["empty_cell_pattern"], row[1].strip("* ").casefold()):
+        elif re.fullmatch(spec["empty_cell_pattern"], row[ci].strip("* ").casefold()):
             problems.append(f"Competitor cell is empty for {row[0]!r}; describe the competitor's capability")
     if spec.get("requires_sources"):
         marker = rules()["claims"]["verify_marker"]

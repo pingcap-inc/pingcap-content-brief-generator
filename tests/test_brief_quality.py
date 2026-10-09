@@ -96,7 +96,7 @@ class ConfigTests(unittest.TestCase):
             for spec in data["sections"]:
                 for pattern in spec["match"]:
                     re.compile(pattern)
-        self.assertEqual(bq.template_for("alternative")["primary_cta_section"], "decision")
+        self.assertEqual(bq.template_for("alternative")["primary_cta_section"], "how_tidb_helps")
         self.assertEqual(bq.template_for("blog")["content_types"], ["blog", "product", "playbook"])
 
     def test_prompts_follow_house_style(self):
@@ -287,39 +287,65 @@ class CheckTests(unittest.TestCase):
 
     def test_comparison_template(self):
         self.assertFails("template_sections", "## How TiDB solves agent backend sprawl", "## Why distributed SQL handles agent sprawl")
-        self.assertFails("section_capabilities", "### Key differences\n\nSupabase relies", "Supabase relies")
-        self.assertIn("section_integrations", failing(self.good.replace("SQL client", "client"), self.ctx))
+        self.assertFails("section_at_a_glance", "### Key differences\n\nSupabase bundles", "Supabase bundles")
+        self.assertFails("section_decision", "### Choose TiDB if", "### TiDB fit")
+        self.assertFails("section_decision", "### Choose Supabase if", "### Supabase fit")
+        # FAQs close the page, as on pingcap.com/compare/.
+        faq = self.good[self.good.index("## Supabase alternative FAQs"):self.good.index("### Schema Markup Recommendations")]
+        decision = self.good.index("## Who should choose TiDB vs Supabase?")
+        moved = self.good.replace(faq, "")
+        moved = moved[:decision] + faq + moved[decision:]
+        self.assertIn("template_sections", failing(moved, self.ctx))
+        # The at-a-glance table leads the outline.
+        glance = self.good[self.good.index("## TiDB Cloud Zero vs Supabase at a glance"):self.good.index("## How do TiDB and Supabase differ")]
+        architecture = self.good[self.good.index("## How do TiDB and Supabase differ"):self.good.index("## How do TiDB and Supabase compare on")]
+        swapped = self.good.replace(glance + architecture, architecture + glance)
+        self.assertIn("template_sections", failing(swapped, self.ctx))
         h2 = "## How TiDB solves agent backend sprawl with distributed SQL on TiKV"
         section = self.good[self.good.index(h2):self.good.index("## Supabase alternative FAQs")]
-        self.assertIn("section_how_tidb_solves", failing(self.good.replace(section, section.replace("intro", "earlier")), self.ctx))
+        self.assertIn("section_how_tidb_helps", failing(self.good.replace(section, section.replace("intro", "earlier")), self.ctx))
         h2 = "## How TiDB solves agent backend sprawl with distributed SQL on TiKV"
         section = self.good[self.good.index(h2):self.good.index("## Supabase alternative FAQs")]
         stripped = re.sub(r"(?i)TiKV|Raft|native VECTOR type|VECTOR", "the engine", section)
-        self.assertIn("section_how_tidb_solves", failing(self.good.replace(section, stripped), self.ctx))
-        moved = self.good.replace("## How should you choose between", "## Next steps between")
+        self.assertIn("section_how_tidb_helps", failing(self.good.replace(section, stripped), self.ctx))
+        moved = self.good.replace("## Who should choose TiDB vs Supabase?", "## Next steps for TiDB and Supabase")
         self.assertIn("template_sections", failing(moved, self.ctx))
 
     def test_at_a_glance(self):
-        self.assertFails("section_at_a_glance", "| Category | Supabase |", "| Area | Supabase |")
-        self.assertFails("section_at_a_glance", "| Category | Supabase |", "| Category | Competitor |")
-        self.assertFails("section_at_a_glance", "| Hosted Supabase MCP server for agents |", "| N/A |")
-        failures = self.assertFails("section_at_a_glance", "| Storage | Supabase Storage for files and objects | Pair with object storage such as S3 | Supabase for bundled file storage |\n", "")
-        self.assertIn("section_at_a_glance", failures)
+        header = "| Criteria | TiDB | Supabase |"
+        self.assertFails("section_at_a_glance", header, "| Area | TiDB | Supabase |")
+        self.assertFails("section_at_a_glance", header, "| Criteria | TiDB | Competitor |")
+        self.assertFails("section_at_a_glance", header, "| Criteria | TiDB | Supabase | Best fit |")
+        self.assertFails("section_at_a_glance", "| Project created in the dashboard or CLI |", "| N/A |")
+        self.assertFails("section_at_a_glance", "| HTAP / analytics | TiFlash columnar replicas for analytics on fresh data | Postgres analytics or an external warehouse |\n", "")
         self.assertFails("section_at_a_glance", "Sources: https://supabase.com/docs (verify before publication)", "Sources: supabase docs")
 
-    def test_reviews_pricing_and_ratings(self):
-        self.assertIn("section_reviews", failing(self.good.replace("review count", "count"), self.ctx))
-        self.assertFails("section_reviews", "G2, Capterra, and Clutch", "G2")
-        self.assertFails("no_invented_ratings", "Supabase has a large community presence", "Supabase rates 4.6/5 on G2")
+    def test_at_a_glance_columns_are_normalized_to_house_order(self):
+        rows = ["| Primary use | Distributed SQL for many isolated agent databases | Bundled Postgres backend with auth and storage |",
+                "| Architecture / database model | TiDB Cloud Zero distributed SQL on TiKV, MySQL compatible | Managed Postgres per project |"]
+        swapped = self.good.replace("| Criteria | TiDB | Supabase |", "| Category | Supabase | TiDB product |")
+        for row in rows:
+            cells = row.strip("|").split("|")
+            swapped = swapped.replace(row, "|" + "|".join([cells[0], cells[2], cells[1]]) + "|")
+        out, notes = bq.apply_deterministic(swapped, self.ctx)
+        self.assertIn("| Criteria | TiDB | Supabase |", out)
+        for row in rows:
+            self.assertIn(row.replace("|", " | ").replace("  ", " ").strip(), out.replace("|", " | ").replace("  ", " "))
+        self.assertIn("Normalized the at-a-glance table columns", notes)
+        self.assertNotIn("section_at_a_glance", failing(out, self.ctx))
+        self.assertEqual(bq.apply_deterministic(self.good, self.ctx)[0], self.good)
+
+    def test_pricing_and_ratings(self):
+        self.assertFails("no_invented_ratings", "You want bundled auth and storage", "Supabase rates 4.6/5 on G2. You want bundled auth and storage")
         self.assertFails("section_pricing", "as of 2026, per https://supabase.com/pricing", "per https://supabase.com/pricing")
         self.assertFails("section_pricing", "per https://supabase.com/pricing (verify", "per the website (verify")
         self.assertFails("section_pricing", "describe the Request Units billing model", "say TiDB costs $5 per month, and describe the Request Units billing model")
 
     def test_primary_cta(self):
-        cta = "**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/)\n\n**Visual:** Table: decision"
-        self.assertFails("primary_cta", cta, "**Visual:** Table: decision")
-        self.assertFails("primary_cta", "[distributed SQL database for AI applications](https://www.pingcap.com/ai/)\n\n**Visual:** Table: decision",
-                         "[AI database](https://www.pingcap.com/ai/)\n\n**Visual:** Table: decision")
+        cta = "**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/)\n\n**Visual:** Architecture diagram: TiKV"
+        self.assertFails("primary_cta", cta, "**Visual:** Architecture diagram: TiKV")
+        self.assertFails("primary_cta", "[distributed SQL database for AI applications](https://www.pingcap.com/ai/)\n\n**Visual:** Architecture diagram: TiKV",
+                         "[AI database](https://www.pingcap.com/ai/)\n\n**Visual:** Architecture diagram: TiKV")
         self.assertFails("primary_cta", "**Visual:** Table: billing model comparison.",
                          "**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/)\n\n**Visual:** Table: billing model comparison.")
 
@@ -327,12 +353,12 @@ class CheckTests(unittest.TestCase):
         self.assertFails("internal_links_priority", "| distributed SQL database for AI applications | https://www.pingcap.com/ai/ |",
                          "| AI hub | https://www.pingcap.com/ai/ |")
         row = "| TiDB Cloud Zero for agents | https://www.pingcap.com/tidb/cloud/zero/ |"
-        moved = self.good.replace("| How do deployment, governance, and multi-tenant architecture differ? " + row,
-                                  "| What do support, reviews, and market signals show? " + row)
+        moved = self.good.replace("| How do operations and deployment differ? " + row,
+                                  "| How does pricing compare for agent backends? " + row)
         self.assertIn(row, self.good)
         self.assertIn("internal_links_relevance", failing(moved, self.ctx))
         required = context(required_links=[{"url": "https://www.pingcap.com/tidb/cloud/zero/",
-                                             "anchor": "TiDB Cloud Zero for agents", "section": "deployment"}])
+                                             "anchor": "TiDB Cloud Zero for agents", "section": "operations"}])
         self.assertNotIn("internal_links_required", failing(self.good, required))
         required["required_links"][0]["section"] = "pricing"
         self.assertIn("internal_links_required", failing(self.good, required))
@@ -362,8 +388,8 @@ class CheckTests(unittest.TestCase):
     def test_style_lint(self):
         self.assertFails("style_lint", "Compare pricing models, not list prices",
                          "Compare pricing models — not list prices")
-        self.assertFails("style_lint", "Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/), in the decision H2.",
-                         "Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/) — in the decision H2.")
+        self.assertFails("style_lint", "Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/), in the How TiDB solves H2.",
+                         "Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/) — in the How TiDB solves H2.")
         self.assertFails("style_lint", "Cover MCP servers", "Seamlessly cover MCP servers")
         self.assertFails("style_lint", "Name the mechanism in the first sentence:", "TiDB is the best choice. Name the mechanism:")
 
@@ -396,8 +422,8 @@ class CheckTests(unittest.TestCase):
         bad = self.good.replace("Cover MCP servers", "Seamlessly cover MCP servers").replace(
             "Supabase Alternative for AI Agent Backends - PingCAP", "Supabase Alternative - PingCAP")
         plan = bq.repair_plan(bq.run_checks(bad, self.ctx))
-        self.assertEqual(set(plan), {"Meta Elements", "Outline / Headings::h2_4"})
-        self.assertTrue(any("seamless" in v.casefold() for v in plan["Outline / Headings::h2_4"]))
+        self.assertEqual(set(plan), {"Meta Elements", "Outline / Headings::h2_6"})
+        self.assertTrue(any("seamless" in v.casefold() for v in plan["Outline / Headings::h2_6"]))
 
 
 def brief_namespace():
@@ -469,7 +495,7 @@ class RegressionFixtureTests(unittest.TestCase):
         self.assertEqual(client.messages.create.call_count, 2, "exactly one repair round")
         self.assertEqual(report["status"], "validated")
         self.assertEqual(set(report["repair"]["units_applied"]),
-                         {"Meta Elements", "Outline / Headings::h2_4", "Outline / Headings::h2_9"})
+                         {"Meta Elements", "Outline / Headings::h2_6", "Outline / Headings::h2_10"})
         self.assertTrue(all(c["passed"] for c in report["checks"]), [c for c in report["checks"] if not c["passed"]])
         self.assertTrue({"meta_title", "style_lint", "faqs", "primary_cta", "sql_vector_syntax"}
                         <= {c["id"] for c in report["checks"]})
@@ -503,8 +529,10 @@ class RegressionFixtureTests(unittest.TestCase):
         self.assertIn("expert review note", text)
         titles = [t for t, *_ in parts["h2s"]]
         self.assertTrue(any("pricing" in t.casefold() for t in titles))
-        self.assertTrue(any("reviews" in t.casefold() for t in titles))
+        self.assertTrue("at a glance" in titles[0].casefold())
+        self.assertTrue(any(t.startswith("Who should choose") for t in titles))
         self.assertTrue(any(t.startswith("How TiDB solves") for t in titles))
+        self.assertIn("FAQ", titles[-1])
         serp_ranks = {r[0] for r in bq.table_rows(text[slice(*parts["preamble"])]) if r[0] != "#"}
         self.assertTrue(serp_ranks <= {str(r) for r in RELEVANT_RANKS})
         self.assertNotRegex(text[slice(*parts["preamble"])], r"(?i)not (topically )?relevant|excluded")
@@ -519,7 +547,7 @@ class RegressionFixtureTests(unittest.TestCase):
         self.assertFalse(lint["passed"])
         self.assertTrue(any("seamless" in d.casefold() for d in lint["details"]))
         self.assertTrue(all({"id", "passed", "details"} <= set(c) for c in report["checks"]))
-        self.assertIn("Outline / Headings::h2_4", report["repair"]["units_requested"])
+        self.assertIn("Outline / Headings::h2_6", report["repair"]["units_requested"])
 
     def test_too_few_relevant_pages_fails_before_any_claude_call(self):
         with self.assertRaisesRegex(ValueError, "serp_relevant_pages"):

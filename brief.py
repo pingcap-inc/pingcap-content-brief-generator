@@ -1021,10 +1021,13 @@ def validate_brief(content, content_type, candidates, plan, ctx=None):
     h2s = list(re.finditer(r"(?m)^##\s+(.+)$", outline))
     if not 1 <= len(h2s) <= (12 if content_type == "listicle" else 10):
         errors.append("Invalid number of article H2s")
-    if content_type in {"comparison", "listicle"} and (
-        len(h2s) < 2 or "at a glance" not in h2s[1].group(1).lower()
+    # Comparison pages lead with the at-a-glance table, as on pingcap.com/compare/;
+    # listicles put a quick answer first.
+    glance = {"comparison": 0, "alternative": 0, "listicle": 1}.get(content_type)
+    if glance is not None and (
+        len(h2s) <= glance or not re.search(r"(?i)at[- ]a[- ]glance|side[- ]by[- ]side", h2s[glance].group(1))
     ):
-        errors.append("Second H2 must be an at a glance section")
+        errors.append(f"{'First' if glance == 0 else 'Second'} H2 must be an at a glance section")
     for index, match in enumerate(h2s):
         end = h2s[index + 1].start() if index + 1 < len(h2s) else len(outline)
         section = outline[match.end():end]

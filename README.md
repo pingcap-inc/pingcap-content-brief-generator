@@ -105,7 +105,7 @@ Rules, templates and lists live in `config/`, not in code:
 | File | Holds |
 |---|---|
 | `config/brief_rules.yaml` | Meta limits, slug prefixes, intent labels, SERP depth, takeaway and FAQ limits, E-E-A-T terms, banned words, word-count tiers, internal-link weights |
-| `config/templates/*.yaml` | Page-type outlines (comparison/alternative, listicle, solution, default): required H2s, order, word weights, guidance |
+| `config/templates/*.yaml` | Page-type outlines (comparison/alternative, listicle, solution, default): required H2s, order, word weights, guidance. Comparison and listicle outlines follow the live pages under https://www.pingcap.com/compare/ |
 | `config/prompts/*.md` | Base instructions and quality checklist, with `{{...}}` placeholders filled from the rules |
 | `config/customer_roster.yaml` | The only customers and URLs a brief may cite |
 | `config/product_facts.yaml` | Product facts the brief is checked against |
@@ -120,7 +120,7 @@ Rules, templates and lists live in `config/`, not in code:
    marks unmatched customer numbers and sourced competitor prices for verification.
 2. **Checks.** Every rule is a named check: meta title/description lengths counted
    in code, SERP table (relevant pages from the top 20 only), Key Takeaways, E-E-A-T,
-   template H2s and order, at-a-glance table, Key differences H3s, reviews, pricing,
+   template H2s and order, at-a-glance table, Key differences H3, decision H3s, pricing,
    one primary CTA, internal links (priority, required, section relevance), case
    studies, FAQs, style lint (em dashes, banned words, TiDB superlatives), product
    facts, TiDB SQL `<=>` misuse (parsed with sqlglot), empty data, word count.
@@ -209,8 +209,8 @@ rankings are excluded; lower rankings include the existing URL as an improvement
 opportunity. No ranking returned means a potential gap requiring a content check.
 Failed lookups remain unknown. These checks add SEMrush requests and API usage.
 
-Before export, structural validation checks section order, H2 limits, second-H2
-comparison placement, word budgets, visual-line presence, metadata lengths, URL
+Before export, structural validation checks section order, H2 limits,
+at-a-glance placement (first H2 for comparisons, second for listicles), word budgets, visual-line presence, metadata lengths, URL
 structure, and supplied internal-link URLs and placements. Truncated responses or
 validation failures stop the run with an error after preserving `draft.md`,
 `validation.json`, and `research.md` in a unique local `brief_failed_*` folder.

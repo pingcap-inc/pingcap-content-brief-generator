@@ -138,7 +138,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_wrong_competitor_cannot_validate_itself(self):
         text,ctx,_=finished(ctx=context(competitor='Supabase'))
-        text=text.replace('| Category | Supabase |','| Category | MariaDB |')
+        text=text.replace('| Criteria | TiDB | Supabase |','| Criteria | TiDB | MariaDB |')
         self.assertEqual(bq.competitor_name(text,ctx),'Supabase')
         self.assertIn('section_at_a_glance',failing(text,ctx))
 

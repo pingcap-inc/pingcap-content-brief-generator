@@ -35,18 +35,18 @@ class FollowupTests(unittest.TestCase):
 
     def test_equivalent_tidb_column_is_normalized(self):
         text,ctx,_=finished(ctx=context(competitor='Supabase'))
-        text=text.replace('| Category | Supabase | TiDB product | Best fit |','| Category | Supabase | TiDB | Best fit |')
+        text=text.replace('| Criteria | TiDB | Supabase |','| Category | TiDB product | Supabase |')
         corrected,_=bq.apply_deterministic(text,ctx)
-        self.assertIn('| Category | Supabase | TiDB product | Best fit |',corrected)
+        self.assertIn('| Criteria | TiDB | Supabase |',corrected)
 
     def test_bare_domains_do_not_count_as_source_urls(self):
-        spec=bq.template_for('comparison')['sections'][1]['table']
-        text='| Category | MariaDB | TiDB product | Best fit |\n|---|---|---|---|\n**Sources:** mariadb.com/kb/ (verify before publication)'
+        spec=bq.glance_spec(bq.template_for('comparison'))
+        text='| Criteria | TiDB | MariaDB |\n|---|---|---|\n**Sources:** mariadb.com/kb/ (verify before publication)'
         self.assertTrue(any('https://' in p for p in bq._glance_problems(text,spec,'MariaDB')))
 
     def test_unqualified_false_vector_claim_is_rejected(self):
-        spec=bq.template_for('comparison')['sections'][1]['table']
-        text='| Category | MariaDB | TiDB product | Best fit |\n|---|---|---|---|\n| Vector support | No native VECTOR type | VECTOR | Version-specific |'
+        spec=bq.glance_spec(bq.template_for('comparison'))
+        text='| Criteria | TiDB | MariaDB |\n|---|---|---|\n| Vector support | VECTOR | No native VECTOR type |'
         self.assertTrue(any('11.7.1' in p for p in bq._glance_problems(text,spec,'MariaDB')))
 
     def test_repeated_technical_link_topic_is_not_discarded(self):
@@ -63,3 +63,27 @@ class FollowupTests(unittest.TestCase):
 
     def test_link_vocabulary_matches_compatibility_and_scaling_variants(self):
         self.assertEqual(bq._stems({'compatible','scalable'}),bq._stems({'compatibility','scaling'}))
+
+
+class CompareHouseFormatTests(unittest.TestCase):
+    """Comparison and listicle outlines follow the live pingcap.com/compare/ pages."""
+
+    def test_comparison_leads_with_glance_and_closes_with_faqs(self):
+        template=bq.template_for('comparison')
+        titles=['TiDB vs OceanBase at a Glance','What Makes TiDB and OceanBase Architecturally Different?',
+                'How Do TiDB and OceanBase Compare on Compatibility and Migration?',
+                'Which Database Performs Better as Workloads Grow?',
+                'Which Platform Is Better for AI and Vector Workloads?',
+                'Which Platform Is Easier to Run in Cloud-Native Environments?',
+                'How Should Buyers Compare Pricing Models and Total Cost?',
+                'Who Should Choose TiDB vs OceanBase?','How TiDB Helps Teams Outgrow OceanBase Limits',
+                'TiDB vs OceanBase FAQs']
+        found=bq.match_template_sections(titles,template)
+        self.assertEqual([found[s['id']] for s in template['sections']],list(range(10)))
+        self.assertEqual(bq.glance_spec(template)['columns'],['Criteria','TiDB','{competitor}'])
+
+    def test_listicle_spotlight_uses_live_heading(self):
+        template=bq.template_for('listicle')
+        spec=next(s for s in template['sections'] if s['id']=='tidb_spotlight')
+        import re
+        self.assertTrue(any(re.search(p,'When Is TiDB the Best HTAP Database?') for p in spec['match']))
