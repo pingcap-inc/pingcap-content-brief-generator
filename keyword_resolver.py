@@ -158,7 +158,8 @@ class ResearchAPI:
             data = response.json()
             tasks = data.get('tasks') or []
             if data.get('status_code') != 20000 or len(tasks) != 1 or tasks[0].get('status_code') != 20000:
-                raise ProviderError(f'DataForSEO {endpoint} failed: '+str([(t.get('status_code'),t.get('status_message')) for t in tasks]))
+                detail = [(t.get('status_code'),t.get('status_message')) for t in tasks] or [(data.get('status_code'),data.get('status_message'))]
+                raise ProviderError(f'DataForSEO {endpoint} failed: '+str(detail))
             result = tasks[0].get('result')
             if not isinstance(result, list):
                 raise ProviderError(f'DataForSEO {endpoint} returned no usable result.')
