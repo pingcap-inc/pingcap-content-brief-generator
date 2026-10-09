@@ -513,7 +513,6 @@ class RegressionFixtureTests(unittest.TestCase):
             self.assertLessEqual(len(lines), 4)
         self.assertTrue(all("<=>" not in code for _, code in bq.tidb_sql_snippets(text)))
         self.assertIn("**Key Takeaways**", text)
-        self.assertIn("author bio with relevant credentials", text)
         self.assertIn("expert review note", text)
         titles = [t for t, *_ in parts["h2s"]]
         self.assertTrue(any("pricing" in t.casefold() for t in titles))
@@ -526,7 +525,7 @@ class RegressionFixtureTests(unittest.TestCase):
     def test_unrepaired_draft_fails_with_every_check_in_validation_json(self):
         bad = FIXTURE.replace("Cover MCP servers", "Seamlessly cover MCP servers")
         with self.assertRaisesRegex(ValueError, "style_lint"):
-            self.run_generation([reply(bad), reply(bad)])
+            self.run_generation([reply(bad), reply(bad), reply(bad)])
         report = self.saved_report()
         self.assertEqual(report["status"], "unvalidated")
         lint = next(c for c in report["checks"] if c["id"] == "style_lint")

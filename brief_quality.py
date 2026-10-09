@@ -637,6 +637,27 @@ def _replace_body(content, name, text):
 _TARGET = re.compile(r"(?mi)^\W*Target\W*:?\W*~?\s*([0-9][0-9,]*)\s*(?:[–-]\s*~?([0-9][0-9,]*))?")
 
 
+def _add_eeat(content):
+    """Append any missing E-E-A-T instruction to the H1 intro guidance."""
+    parts = outline_parts(content)
+    if not parts or not parts.get("h1"):
+        return content, []
+    start, end = parts["h1"]
+    block = content[start:end]
+    missing = [g for g in rules()["eeat"] if not all(re.search(p, block) for p in g["all"])]
+    if not missing:
+        return content, []
+    addition = " ".join(g["instruction"] for g in missing)
+    line = re.search(r"(?mi)^.*intro guidance.*$", block)
+    if line:
+        at = start + line.end()
+        content = content[:at] + " " + addition + content[at:]
+    else:
+        at = start + len(block.rstrip().rstrip("-").rstrip())
+        content = content[:at] + "\n\n**Intro guidance:** " + addition + content[at:]
+    return content, [f"Added missing E-E-A-T instructions: {', '.join(g['id'] for g in missing)}"]
+
+
 def _add_mechanism_tie_back(content, template):
     """The mechanism H2 must point the writer back to the intro's problem; add the
     instruction when the model's guidance does not already say so."""
@@ -802,6 +823,8 @@ def apply_deterministic(content, ctx):
                     content=content[:start]+corrected+content[end:]
                     notes.append('Normalized the at-a-glance table columns')
         content, more = _add_mechanism_tie_back(content, template)
+        notes += more
+        content, more = _add_eeat(content)
         notes += more
 
     content, more = _fill_word_budgets(content, ctx.get("plan") or {})

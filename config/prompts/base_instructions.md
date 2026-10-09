@@ -254,9 +254,9 @@ Directly under the H1, write its own line "Target: ~X–Y words" for the introdu
    These bullets are copy the writer publishes, so follow the house style exactly.
 2. Intro guidance for the writer in at most 4 sentences. It asks for a 40 to 60 word
    answer-first opening that defines the topic and uses the primary keyword once,
-   plus a visible updated month and year, author role, reviewer credential, and
-   review date. It must also include these E-E-A-T requirements:
-   - an author bio with relevant credentials (name the kind of expertise needed)
+   plus a visible updated month and year and review date. The author is not known
+   when the brief is written, so do not ask for an author bio. It must include these
+   E-E-A-T requirements:
    - an expert review note (who reviews the piece technically before publication)
    - a methodology note stating that ratings, pricing, and feature availability
      must be verified before publication

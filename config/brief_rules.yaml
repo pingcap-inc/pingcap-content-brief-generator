@@ -47,13 +47,15 @@ key_takeaways:
   max_lines_after_h1: 3
 
 # Each group must match somewhere in the H1 intro guidance.
+# E-E-A-T requirements for the intro guidance. When one is missing, code appends
+# its instruction to the intro guidance instead of failing the brief.
 eeat:
-  - id: author_bio
-    all: ['(?i)author bio', '(?i)credential|expertise|experience']
   - id: expert_review
     all: ['(?i)expert review']
+    instruction: Add an expert review note naming the technical reviewer and review date.
   - id: methodology_note
     all: ['(?i)methodology', '(?i)verif']
+    instruction: Add a methodology note stating that feature availability, pricing, and ratings are verified before publication.
 
 faq:
   min_questions: 4
@@ -199,4 +201,5 @@ mechanism_tie_back:
   bullet: "- Tie this back to the problem named in the intro: show how the mechanism above resolves it for the reader."
 
 repair:
-  max_rounds: 1
+  # A second round runs only when the first leaves failures (usually a small length overrun).
+  max_rounds: 2

@@ -1381,9 +1381,11 @@ Null values mean unavailable, never a measured zero. Do not invent link-type rat
         checks = check(text)
         errors = bq.failures(checks) if quality else checks
         plan_units = bq.repair_plan(checks) if quality and errors else {}
-        if plan_units and bq.rules()["repair"]["max_rounds"] >= 1:
-            # One regeneration of only the offending sections. Link rows go back to h2_N
-            # IDs first, so renamed or reordered H2s re-render after the repair.
+        rounds = 0
+        while plan_units and rounds < bq.rules()["repair"]["max_rounds"]:
+            rounds += 1
+            # Regenerate only the offending sections. Link rows go back to h2_N IDs
+            # first, so renamed or reordered H2s re-render after the repair.
             text = unresolve_internal_link_ids(text)
             try:
                 repair = ask(research_block + "\n\n---\n\n" + bq.repair_prompt(text, plan_units))
@@ -1391,14 +1393,16 @@ Null values mean unavailable, never a measured zero. Do not invent link-type rat
                 preserve_failure(text, 'Draft repair request', exc)
             repaired_raw = "\n".join(b.text for b in repair.content if b.type == "text")
             report["repair"] = {"units_requested": sorted(plan_units), "violations_before": errors,
-                                "stop_reason": repair.stop_reason}
-            if repair.stop_reason == "end_turn":
-                spliced, applied = bq.apply_repair(text, repaired_raw, plan_units)
-                report["repair"]["units_applied"] = applied
-                text, more = finish(spliced[len(header):] if spliced.startswith(header) else spliced)
-                notes += more
-                checks = check(text)
-                errors = bq.failures(checks)
+                                "stop_reason": repair.stop_reason, "rounds": rounds}
+            if repair.stop_reason != "end_turn":
+                break
+            spliced, applied = bq.apply_repair(text, repaired_raw, plan_units)
+            report["repair"]["units_applied"] = applied
+            text, more = finish(spliced[len(header):] if spliced.startswith(header) else spliced)
+            notes += more
+            checks = check(text)
+            errors = bq.failures(checks)
+            plan_units = bq.repair_plan(checks) if errors else {}
 
     report.update(stop_reason=stop_reason, deterministic_notes=notes,
                   checks=[{k: v for k, v in c.items() if k != "units"} for c in checks] if quality else [],

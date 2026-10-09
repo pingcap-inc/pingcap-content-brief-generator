@@ -183,11 +183,19 @@ class ApprovedBriefPatternTests(unittest.TestCase):
 class PressurePointsRunTests(unittest.TestCase):
     """From the "Seven Pressure Points" blog run (brief_failed_f8tbb0e6)."""
 
-    def test_author_expertise_wording_satisfies_eeat(self):
+    def test_author_bio_is_not_required(self):
+        # The author is unknown when the brief is written.
+        self.assertNotIn('author_bio',[g['id'] for g in bq.rules()['eeat']])
+        base,_=bq.system_prompt_parts('blog',{'url':'https://www.pingcap.com/tidb/','anchor':'TiDB'},None)
+        self.assertIn('do not ask for an author bio',base)
+
+    def test_missing_eeat_instruction_is_added_not_failed(self):
         text,ctx,_=finished()
-        h1=text[slice(*bq.outline_parts(text)['h1'])]
-        reworded=text.replace(h1,re.sub(r'(?i)credentials?','relevant expertise',h1))
-        self.assertNotIn('eeat',failing(reworded,ctx))
+        stripped=re.sub(r'(?i)[^.]*expert review[^.]*\.','',text,count=1)
+        self.assertNotEqual(stripped,text)
+        out,notes=bq.apply_deterministic(stripped,ctx)
+        self.assertTrue(any('expert_review' in n for n in notes),notes)
+        self.assertNotIn('eeat',failing(out,ctx))
 
     def test_blog_prompt_handles_numbered_titles(self):
         base,_=bq.system_prompt_parts('blog',{'url':'https://www.pingcap.com/tidb/','anchor':'TiDB'},None)

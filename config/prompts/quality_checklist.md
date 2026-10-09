@@ -27,8 +27,8 @@ fails a check before proceeding. The generator re-checks most items in code.
     mention of excluded pages, and (2) a "Patterns Favored by AI Overviews & LLMs"
     block based on the primary keyword's SERP.
 12. Directly under the H1: a {{key_takeaways.label}} block of {{key_takeaways.min_bullets}} to {{key_takeaways.max_bullets}} bullets, each
-    {{key_takeaways.min_words}} to {{key_takeaways.max_words}} words, then intro guidance with an author bio and credentials, an
-    expert review note, and a methodology note about verifying ratings, pricing,
+    {{key_takeaways.min_words}} to {{key_takeaways.max_words}} words, then intro guidance with an
+    expert review note and a methodology note about verifying ratings, pricing,
     and feature availability.
 13. Every page-type template H2 is present in the template's order.
 14. The FAQ H2 has {{faq.min_questions}} to {{faq.max_questions}} questions sourced from the Relevant LLM Queries and
