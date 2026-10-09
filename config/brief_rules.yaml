@@ -174,5 +174,14 @@ brief_length:
   h2_max_words: 140
   faq_max_words: 220
 
+# Refresh mode (--refresh-url): labels follow the approved refresh briefs.
+refresh:
+  current_label: Current
+  change_label: Change
+  removed_label: Removed or merged from the live page
+  change_values: [Keep, Rename, Rewrite, Expand, New, Merge, Move]
+  # Page headings from this marker on are site widgets, not article content.
+  end_of_article: ['(?i)^related resources$', '(?i)^have questions\b']
+
 repair:
   max_rounds: 1

@@ -321,8 +321,8 @@ For every H2, provide exactly the following, and nothing more:
 
 Write the heading as actual markdown: ## for H2, ### for H3, #### for H4.
 Do NOT write "Recommended Heading:" as a label. Just write the heading directly.
-**Current Heading** (for content refreshes only): the existing heading being replaced.
-Omit this field entirely for new content.
+For a refresh, follow the Refresh Mode rules in the research data (Current and
+Change lines). Omit them entirely for new content.
 **Target word count**: "Target: ~X–Y words" for the article section. Distribute the
 total proportionally, including the H1 introduction. The sum of H2 targets must fit
 the selected tier.

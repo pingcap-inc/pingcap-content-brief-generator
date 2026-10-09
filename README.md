@@ -87,6 +87,27 @@ objects. `section` is a template section id (for example `pricing`) or H2 text.
 The priority link and required links must be live, indexable PingCAP pages or the
 run stops before generation.
 
+### Refreshing or optimizing an existing page
+
+Add `--refresh-url` to plan changes to a live pingcap.com page instead of a new one
+(blog refreshes, product-page optimizations, revivals of redirected or 404 pages):
+
+```bash
+python brief.py "MySQL Alternatives at Scale: Why TiDB Beats MariaDB" blog \
+  --refresh-url https://www.pingcap.com/blog/practical-mysql-alternatives-tidb/ \
+  --priority-link-url https://www.pingcap.com/tidb/ --priority-link-anchor "TiDB"
+```
+
+The generator reads the live page (H1 to H4, title, meta description, code blocks,
+word count, HTTP status, redirects), ignoring site chrome and the widgets after
+"Related Resources". The brief keeps the live URL and follows the approved refresh
+briefs: a `**Current:**` line under the H1 and every H2, a `**Change:**` line (Keep,
+Rename, Rewrite, Expand, New, Merge, Move) with a rationale, H3s as
+`### New wording (Current: old wording)`, and a "Removed or merged from the live
+page" list. The `refresh_mapping` check fails if any live H2 is unaccounted for. The
+page never links to itself. Labels and end-of-article markers live under `refresh`
+in `config/brief_rules.yaml`.
+
 ## Model configuration
 
 By default the script uses:
