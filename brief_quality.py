@@ -55,6 +55,13 @@ def roster():
     return load_yaml("customer_roster.yaml")["customers"]
 
 
+def link_allowed(url):
+    """Case-study pages may be linked only when the customer is in the verified roster."""
+    if re.search(r"/case-stud(?:y|ies)/.", urlparse(url).path):
+        return url in {c["url"] for c in roster()}
+    return True
+
+
 def product_facts():
     return load_yaml("product_facts.yaml")
 
@@ -1129,6 +1136,12 @@ def _facts_check(content):
         for check in fact["checks"]:
             if check["type"] == "forbidden_pattern":
                 for mt in re.finditer(check["pattern"], content):
+                    # A sentence that already carries the required qualifier is not the claim.
+                    start = max(content.rfind(". ", 0, mt.start()), content.rfind("\n", 0, mt.start())) + 1
+                    ends = [i for i in (content.find(". ", mt.end()), content.find("\n", mt.end())) if i >= 0]
+                    sentence = content[start:min(ends) if ends else len(content)]
+                    if check.get("allow_if") and re.search(check["allow_if"], sentence):
+                        continue
                     problems.append(f"{fact['id']}: {check['message']}")
                     units.append(unit_at(content, mt.start()))
             elif check["type"] == "number_in_context":

@@ -87,3 +87,25 @@ class CompareHouseFormatTests(unittest.TestCase):
         spec=next(s for s in template['sections'] if s['id']=='tidb_spotlight')
         import re
         self.assertTrue(any(re.search(p,'When Is TiDB the Best HTAP Database?') for p in spec['match']))
+
+
+class SecondMariaDBRunTests(unittest.TestCase):
+    """Failures from the "mariadb alternative" run (brief_failed_yw9rjm43)."""
+
+    def _vector_problems(self,text):
+        return [d for d in bq._facts_check(text)['details'] if d.startswith('mariadb_vector_support')]
+
+    def test_version_qualified_vector_guardrail_is_not_a_false_claim(self):
+        guard=('Do not claim MariaDB has no native vector support without specifying that this '
+               'limitation applies only to versions prior to 11.7.1.')
+        self.assertEqual(self._vector_problems(guard),[])
+        self.assertEqual(self._vector_problems('Teams on MariaDB 10.11 lack native vector support before version 11.7.'),[])
+        self.assertTrue(self._vector_problems('MariaDB has no native vector support, so use TiDB.'))
+        self.assertTrue(self._vector_problems('MariaDB lacks native vector support. Version 11.7.1 is not covered here.'))
+
+    def test_non_roster_case_studies_are_never_offered_as_links(self):
+        roster_url=bq.roster()[0]['url']
+        self.assertTrue(bq.link_allowed(roster_url))
+        self.assertFalse(bq.link_allowed('https://www.pingcap.com/case-study/zalopay-using-a-scale-out-mysql-alternative-to-serve-millions-of-users/'))
+        self.assertTrue(bq.link_allowed('https://www.pingcap.com/case-studies/'))
+        self.assertTrue(bq.link_allowed('https://www.pingcap.com/compare/mysql-compatible-database/'))

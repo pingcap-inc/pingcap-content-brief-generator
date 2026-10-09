@@ -2143,6 +2143,8 @@ def main():
             sitemap_url=PINGCAP_SITEMAP_URL,
         )
         link_rules = quality_rules["internal_links"]
+        # Validation rejects case studies outside the customer roster, so never offer them.
+        inventory_pages = [p for p in inventory_pages if brief_quality.link_allowed(p.get("url", ""))]
         internal_link_candidates = select_internal_link_candidates(
             inventory_pages,
             search_keyword,

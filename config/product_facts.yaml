@@ -10,6 +10,8 @@ facts:
     checks:
       - type: forbidden_pattern
         pattern: '(?i)\bmariadb\b[^.\n|]{0,70}\b(?:has no|lacks|does not support)\b[^.\n|]{0,40}\b(?:native vector|vector type)\b'
+        # Version-qualified sentences ("before 11.7.1") are the correct form.
+        allow_if: '(?i)\b(?:prior to|before|earlier than|older than)\b[^.\n|]{0,30}\b(?:11\.7|version)'
         message: MariaDB has native VECTOR support from 11.7.1; specify the version being compared.
   - id: tidb_cloud_zero_api
     statement: >-
