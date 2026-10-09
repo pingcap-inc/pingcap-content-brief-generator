@@ -435,6 +435,17 @@ def apply_deterministic(content, ctx):
     resolution = ctx["resolution"]
     primary = resolution["primary_keyword"]
 
+    # Preserve the author's exact article title independently of model wording.
+    parts = outline_parts(content)
+    if parts and parts['h1']:
+        start,end = parts['h1']
+        original = content[start:end]
+        title = resolution['title_angle']
+        corrected = re.sub(r'^#[ \t]+[^\n]+',lambda _: '# '+title,original,count=1)
+        if corrected != original:
+            content = content[:start]+corrected+content[end:]
+            notes.append('Restored the supplied article H1')
+
     # Meta: values the model must not choose.
     entities = entity_list(content)
     unique = dedupe(entities, key=lambda e: e[0].casefold())
@@ -457,6 +468,22 @@ def apply_deterministic(content, ctx):
             ("Total MSV", f"{total:,} (primary {resolution['primary_metrics']['msv']:,} + supporting{total_note})", "Supporting Keywords"),
             ("URL Structure", page_url(ctx["content_type"], primary), "Meta Description")]:
         content = _set_meta_row(content, label, value, after)
+
+    template = template_for(ctx['content_type'])
+    parts = outline_parts(content)
+    if parts:
+        found = match_template_sections([title for title,*_ in parts['h2s']],template)
+        if 'at_a_glance' in found:
+            _,start,end = parts['h2s'][found['at_a_glance']]
+            body = content[start:end]
+            expected = ctx.get('competitor') or competitor_name(content,ctx)
+            def table_header(match):
+                return '| Category | '+expected+' | TiDB product | Best fit |'
+            if expected:
+                corrected = re.sub(r'(?m)^\|\s*Category\s*\|\s*'+re.escape(expected)+r'\s*\|\s*TiDB\s*\|\s*Best fit\s*\|\s*$',table_header,body)
+                if corrected != body:
+                    content=content[:start]+corrected+content[end:]
+                    notes.append('Normalized the TiDB comparison column label')
 
     # Empty data: one line instead of an empty table.
     if ctx.get("backlinks_empty"):
@@ -655,7 +682,7 @@ def run_checks(content, ctx, structural_errors=()):
     expected_h1 = ' '.join(resolution['title_angle'].split()).casefold()
     checks.append(_check('article_title', [] if len(h1_titles) == 1 and
                          ' '.join(h1_titles[0].split()).casefold() == expected_h1 else
-                         ['Article H1 must preserve the supplied title angle'], [OUTLINE+'::h1']))
+                         [f'Article H1 must be exactly: # {resolution["title_angle"]}'], [OUTLINE+'::h1']))
     checks.append(_check("key_takeaways", _takeaway_problems(h1), [OUTLINE + "::h1"]))
     problems = [f"Intro guidance is missing the {group['id'].replace('_', ' ')} requirement"
                 for group in cfg["eeat"] if not all(re.search(p, h1) for p in group["all"])]
@@ -780,7 +807,7 @@ def _glance_problems(text, spec, competitor):
     expected = [c.replace("{competitor}", "*") for c in spec["columns"]]
     if len(header) != len(expected) or any(e != "*" and h.strip("*").casefold() != e.casefold()
                                            for h, e in zip(header, expected)):
-        problems.append("At-a-glance columns must be " + " | ".join(c.replace("{competitor}", "[Competitor]") for c in spec["columns"]))
+        problems.append("At-a-glance columns must be " + " | ".join(c.replace("{competitor}", competitor or "[Competitor]") for c in spec["columns"]))
     elif re.fullmatch(r"(?i)\[?competitor\]?", header[1].strip("*")):
         problems.append("At-a-glance column 2 must name the competitor")
     elif competitor and header[1].strip('*').casefold() != competitor.casefold():
@@ -794,13 +821,16 @@ def _glance_problems(text, spec, competitor):
     for row in data:
         if len(row) != len(expected):
             problems.append('Every at-a-glance row must have all required columns')
+        elif competitor and competitor.casefold() == 'mariadb' and re.search(r'(?i)vector',row[0]) and re.search(
+                r'(?i)\b(?:no|without|lacks?|does not (?:have|support))\b.{0,50}\b(?:native|vector)',row[1]) and not re.search(r'\b(?:10|11)\.\d+',row[1]):
+            problems.append('MariaDB has a native VECTOR type from 11.7.1. State the version and check https://mariadb.com/docs/server/reference/sql-structure/vectors/vector before comparing vector support.')
         elif re.fullmatch(spec["empty_cell_pattern"], row[1].strip("* ").casefold()):
             problems.append(f"Competitor cell is empty for {row[0]!r}; describe the competitor's capability")
     if spec.get("requires_sources"):
         marker = rules()["claims"]["verify_marker"]
         source = [l for l in text.splitlines() if re.match(r"(?i)^\W*sources?\b", l)]
         if not source or not _external_urls(" ".join(source)) or marker.casefold() not in " ".join(source).casefold():
-            problems.append(f"At-a-glance table needs a Sources line with competitor source URLs marked '{marker}'")
+            problems.append(f"At-a-glance table needs a Sources line with complete https:// competitor source URLs marked '{marker}'")
     return problems
 
 
@@ -920,6 +950,8 @@ def _link_checks(content, ctx, parts):
     ubiquitous = {t for t in set().union(*blocks)
                   if sum(t in b for b in blocks) >= cfg["section_ubiquity_fraction"] * len(blocks)} if blocks else set()
     ignore = set(cfg["section_ignore_tokens"]) | _stems(tokens(ctx["resolution"]["primary_keyword"])) | ubiquitous
+    generic = set(cfg["section_ignore_tokens"]) | set(rules()['supporting_keywords']['generic_relevance_tokens']) | {'vs','versus','mysql','mariadb','postgres','postgresql','supabase'}
+    generic = _stems(generic)
     problems = []
     for row in rows:
         if row["url"] in exempt or not row["url"]:
@@ -928,9 +960,14 @@ def _link_checks(content, ctx, parts):
         if not span:
             continue
         page = candidates.get(row["url"], {})
-        page_tokens = tokens(" ".join([page.get("title", ""), page.get("h1", ""), page.get("primary_keyword", ""),
-                                       urlparse(row["url"]).path.replace("-", " "), row["anchor"]]))
-        shared = (_stems(page_tokens) & _stems(tokens(content[span[0]:span[1]]))) - ignore
+        page_tokens = tokens(" ".join([page.get("title", ""), page.get("h1", ""), page.get("primary_keyword", ""), page.get("meta_description", ""),
+                                       urlparse(row["url"]).path.replace("-", " ")]))
+        section_tokens = _stems(tokens(content[span[0]:span[1]]))
+        shared = (_stems(page_tokens) & section_tokens) - ignore
+        # A recurring technical term still establishes a specific relationship.
+        # Broad product names and generic words alone cannot rescue a bad placement.
+        technical_overlap = (_stems(page_tokens) & section_tokens) & _stems(cfg.get('section_technical_tokens', [])) - generic
+        shared |= technical_overlap
         if len(shared) < cfg["section_min_shared_tokens"]:
             problems.append(f"{row['url']} shares no topic words with {row['section']!r}")
     checks.append(_check("internal_links_relevance", problems, ["Internal Links"]))
@@ -938,7 +975,9 @@ def _link_checks(content, ctx, parts):
 
 
 def _stems(words):
-    return {w[:-1] if w.endswith("s") and len(w) > 3 else w for w in words}
+    stems = {w[:-1] if w.endswith("s") and len(w) > 3 else w for w in words}
+    families = {'compatible':'compatibility', 'scaling':'scale', 'scalable':'scale'}
+    return {families.get(word,word) for word in stems}
 
 
 def _case_study_check(content, ctx):

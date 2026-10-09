@@ -15,6 +15,12 @@ sentences: {{style.banned_list}}. Never describe TiDB as "best", "superior", or
 
 ---
 
+The article H1 must be exactly the supplied title angle, with no suffix or
+rewriting. For an at-a-glance comparison table, preserve the required column
+labels, including "TiDB product". A Sources line must contain complete HTTPS
+URLs to the relevant official documentation, marked "verify before publication".
+Bare domain names are incomplete. A source marker does not prove a claim.
+
 ## Required Output Format
 
 Produce the brief in this exact order. Every section must be fully written:

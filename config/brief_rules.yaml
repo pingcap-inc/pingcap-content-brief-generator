@@ -150,6 +150,8 @@ internal_links:
   section_min_shared_tokens: 1
   section_ignore_tokens: [tidb, pingcap, cloud, database, databases]
   section_ubiquity_fraction: 0.5
+  # Repeated technical mechanisms still establish relevant link placement.
+  section_technical_tokens: [compatible, compatibility, scale, scaling, scalable, replication, sharding, migration, governance, authentication, vector, analytics, storage]
 
 repair:
   max_rounds: 1
