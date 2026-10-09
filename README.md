@@ -214,7 +214,7 @@ at-a-glance placement (first H2 for comparisons, second for listicles), word bud
 structure, and supplied internal-link URLs and placements. Truncated responses or
 validation failures stop the run with an error after preserving `draft.md`,
 `validation.json`, and `research.md` in a unique local `brief_failed_*` folder.
-Brief generation defaults to 16,000 output tokens; override with a positive integer
+Brief generation defaults to 16,000 output tokens (21,000 for listicles); override with a positive integer
 in `ANTHROPIC_MAX_TOKENS` in your local `.env` (title generation remains at 50).
 Known outline formatting variants (`## H1:` and a visual-summary heading) are
 normalized before validation and export, without changing article content or budgets.

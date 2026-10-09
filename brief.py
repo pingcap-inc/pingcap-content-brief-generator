@@ -1128,7 +1128,10 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
     pages only, priority_link is required, and every check is written to validation.json.
     """
     try:
-        brief_max_tokens = int(os.getenv("ANTHROPIC_MAX_TOKENS") or "16000")
+        # Listicles carry a 7-part review per vendor and overrun 16k; 21k is the largest
+        # value the SDK accepts without streaming.
+        default_max_tokens = "21000" if content_type == "listicle" else "16000"
+        brief_max_tokens = int(os.getenv("ANTHROPIC_MAX_TOKENS") or default_max_tokens)
     except ValueError as exc:
         raise ValueError("ANTHROPIC_MAX_TOKENS must be a positive integer") from exc
     if brief_max_tokens <= 0:
