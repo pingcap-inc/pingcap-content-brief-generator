@@ -948,6 +948,28 @@ def resolve_internal_link_ids(content):
     return content[:start] + table + content[end:]
 
 
+def unresolve_internal_link_ids(content):
+    """Turn rendered heading text back into h2_N IDs, so a repair that renames or
+    reorders H2s re-renders the link table against the repaired outline."""
+    sections = brief_sections(content)
+    outlines = [(body, end) for name, start, end, body in sections if name == "Outline / Headings"]
+    links = [(body, end) for name, start, end, body in sections if name == "Internal Links"]
+    if len(outlines) != 1 or len(links) != 1:
+        return content
+    start, end = outlines[0]
+    ids = {}
+    for line, fenced in markdown_lines(content[start:end]):
+        match = re.match(r"^##[ \t]+(.+)$", line)
+        if not fenced and match:
+            ids.setdefault(match.group(1).strip().strip("*"), f"h2_{len(ids) + 1}")
+    start, end = links[0]
+    def render(match):
+        key = match.group(2).strip().strip("*").strip()
+        return match.group(1) + ids.get(key, match.group(2)) + match.group(3)
+    table = re.sub(r"(?m)^([ \t]*\|[ \t]*)([^|\n]+?)([ \t]*\|)", render, content[start:end])
+    return content[:start] + table + content[end:]
+
+
 def parse_word_budget(text):
     """Read a standalone Target line; a single value is an exact min/max budget."""
     plain = text.replace("**", "").replace("__", "")
@@ -1359,7 +1381,9 @@ Null values mean unavailable, never a measured zero. Do not invent link-type rat
         errors = bq.failures(checks) if quality else checks
         plan_units = bq.repair_plan(checks) if quality and errors else {}
         if plan_units and bq.rules()["repair"]["max_rounds"] >= 1:
-            # One regeneration of only the offending sections.
+            # One regeneration of only the offending sections. Link rows go back to h2_N
+            # IDs first, so renamed or reordered H2s re-render after the repair.
+            text = unresolve_internal_link_ids(text)
             try:
                 repair = ask(research_block + "\n\n---\n\n" + bq.repair_prompt(text, plan_units))
             except Exception as exc:

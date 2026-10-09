@@ -294,8 +294,9 @@ Every brief has a FAQ H2 with {{faq.min_questions}} to {{faq.max_questions}} que
 Source the questions from the Relevant LLM Queries you wrote in Meta Elements and
 from the supplied PAA questions for the primary keyword; do not invent unrelated
 questions. Under each question H3, write "**{{faq.answer_label}}:**" followed by
-1 to {{faq.max_bullets}} short bullet points and nothing else: no Target or Rationale
-lines under FAQ H3s, no preamble, no prose paragraph.
+1 to {{faq.max_bullets}} bullet points of at most 20 words each and nothing else: a direction
+for the writer (what the answer must cover), not a pre-written answer. No Target or
+Rationale lines under FAQ H3s, no preamble, no prose paragraph.
 {{faq.alternative_rule}}
 
 ---
@@ -326,7 +327,7 @@ Change lines). Omit them entirely for new content.
 **Target word count**: "Target: ~X–Y words" for the article section. Distribute the
 total proportionally, including the H1 introduction. The sum of H2 targets must fit
 the selected tier.
-**Rationale**: One sentence (at most 30 words) naming the query pattern this heading
+**Rationale**: One sentence (at most 20 words) naming the query pattern this heading
 captures and why it matters for the buyer or for LLM entity association. Generic
 rationales ("improves SEO", "adds keyword") are not acceptable.
 **Inline Content Guidance**: 2 to 3 bullets, each at most 30 words: the argument to

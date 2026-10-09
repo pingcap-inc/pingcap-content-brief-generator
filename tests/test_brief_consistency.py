@@ -14,7 +14,7 @@ import requests
 
 SOURCE = Path(__file__).resolve().parents[1] / 'brief.py'
 tree = ast.parse(SOURCE.read_text())
-FUNCTIONS = {'_save_failed_brief', 'validate_serp_blocks', 'markdown_lines', 'resolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
+FUNCTIONS = {'_save_failed_brief', 'validate_serp_blocks', 'markdown_lines', 'resolve_internal_link_ids', 'unresolve_internal_link_ids', 'parse_word_budget', 'normalize_brief_headings', 'word_count_plan', 'brief_sections', 'split_brief', 'validate_brief',
              'check_pingcap_ranking', 'get_semrush_keyword_gap', 'get_serp_and_paa',
              'generate_brief', 'semrush_get', 'summarize_title', 'url_domain'}
 CONSTANTS = {'_BRIEF_SECTIONS', '_BASE_INSTRUCTIONS', '_QUALITY_CHECKLIST'}
@@ -216,6 +216,19 @@ class OutputTests(unittest.TestCase):
             '| Wrong heading | Learn | ' + url + ' | Reason |')
         errors = ns['validate_brief'](text, 'blog', [{'url':url}], {'minimum':1800,'maximum':2500})
         self.assertTrue(any("'Wrong heading'" in e and 'valid h2_N ID' in e for e in errors))
+
+    def test_renamed_heading_after_repair_keeps_its_link(self):
+        ns = namespace()
+        url = 'https://www.pingcap.com/example/'
+        text = valid_brief(ns).replace('No verified internal link candidates returned; refresh the sitemap inventory',
+            '| Section (H2) | Anchor text | Target URL | Why |\n| h2_1 | Learn | ' + url + ' | Reason |')
+        resolved = ns['resolve_internal_link_ids'](text)
+        self.assertIn('| Scaling | Learn |', resolved)
+        ids = ns['unresolve_internal_link_ids'](resolved)
+        self.assertIn('| h2_1 | Learn |', ids)
+        self.assertIn('| Section (H2) | Anchor text |', ids)
+        repaired = ns['resolve_internal_link_ids'](ids.replace('## Scaling', '## Scaling, renamed by repair'))
+        self.assertIn('| Scaling, renamed by repair | Learn |', repaired)
 
     def test_link_ids_render_final_headings_and_preserve_other_cells(self):
         ns = namespace()

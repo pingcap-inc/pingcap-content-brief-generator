@@ -1,3 +1,4 @@
+import re
 import unittest
 from keyword_resolver import Resolver, ResolutionError, SEOReviewRequired, load_config, comparison_matches_title
 from test_keyword_resolver import FixtureAPI, MARIADB_ENTITIES
@@ -177,3 +178,18 @@ class ApprovedBriefPatternTests(unittest.TestCase):
         self.assertIn('table SPEC, not a filled table',base)
         self.assertIn('40 to 60 word',base)
         self.assertIn('never call it a drop-in replacement',base)
+
+
+class PressurePointsRunTests(unittest.TestCase):
+    """From the "Seven Pressure Points" blog run (brief_failed_f8tbb0e6)."""
+
+    def test_author_expertise_wording_satisfies_eeat(self):
+        text,ctx,_=finished()
+        h1=text[slice(*bq.outline_parts(text)['h1'])]
+        reworded=text.replace(h1,re.sub(r'(?i)credentials?','relevant expertise',h1))
+        self.assertNotIn('eeat',failing(reworded,ctx))
+
+    def test_blog_prompt_handles_numbered_titles(self):
+        base,_=bq.system_prompt_parts('blog',{'url':'https://www.pingcap.com/tidb/','anchor':'TiDB'},None)
+        self.assertIn('Numbered titles',base)
+        self.assertIn('not a pre-written answer',base)
