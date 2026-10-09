@@ -411,3 +411,24 @@ class UnvalidatedDraftUploadTests(unittest.TestCase):
         calls = []
         self.assertIsNone(self._namespace(calls)["upload_unvalidated_draft"]("T", "blog", {}))
         self.assertEqual(calls, [])
+
+
+class MariaDBComparisonRerunTests(unittest.TestCase):
+    """From the TiDB vs. MariaDB rerun (brief_failed_2dzpg4zs)."""
+
+    def test_banned_word_inside_a_url_is_not_flagged(self):
+        text,ctx,_=finished()
+        url='https://www.pingcap.com/webinars/accelerate-growth-with-a-mysql-alternative-battle-tested-at-any-scale/'
+        withurl=text.replace('Cover MCP servers for both products,',f'Cover MCP servers for both products (see {url}),')
+        self.assertNotEqual(withurl,text)
+        self.assertNotIn('style_lint',failing(withurl,ctx))
+        self.assertIn('style_lint',failing(text.replace('Cover MCP servers','Cover battle-tested MCP servers'),ctx))
+
+    def test_verify_url_note_is_removed(self):
+        text,ctx,_=finished()
+        noted=text.replace('Cover MCP servers for both products,','Cover MCP servers for both products (verify URL before including),')
+        self.assertNotEqual(noted,text)
+        out,notes=bq.apply_deterministic(noted,ctx)
+        self.assertNotIn('verify URL',out)
+        self.assertIn("Removed 'verify URL' placeholder notes",notes)
+        self.assertNotIn('primary_cta',failing(out,ctx))

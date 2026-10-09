@@ -849,6 +849,12 @@ def apply_deterministic(content, ctx):
         content = _replace_body(content, "LLM Visibility Snapshot", cfg["empty_data"]["llm_mentions"])
         notes.append("LLM mentions empty: section replaced with the unavailable-data note")
 
+    # "(verify URL before including)" notes are placeholders, not guidance; drop them.
+    stripped = re.sub(r"[ \t]*\([^()\n]*\bverify (?:the )?url\b[^()\n]*\)", "", content, flags=re.I)
+    if stripped != content:
+        content = stripped
+        notes.append("Removed 'verify URL' placeholder notes")
+
     # CTAs: drop any non-primary CTA line whose URL cannot be verified or that is a placeholder.
     verifier = ctx.get("url_verifier") or (lambda url: False)
     placeholders = [re.compile(p) for p in cfg["cta"]["forbidden_placeholders"]]
@@ -1425,6 +1431,9 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
 def _lint_check(content):
     cfg = rules()["style"]
     problems, units = [], []
+    # URLs are page addresses, not copy: a verified slug may contain a banned word.
+    # Blank them out, keeping offsets so units still map to the right section.
+    content = re.sub(r"https?://[^\s)\]>|]+", lambda m: " " * len(m.group(0)), content)
     for char, name in cfg["forbidden_characters"].items():
         for mt in re.finditer(re.escape(char), content):
             line_end = content.find("\n", mt.start())
