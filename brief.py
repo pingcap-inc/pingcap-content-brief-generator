@@ -1139,6 +1139,7 @@ def _save_failed_brief(text, research_block, report):
     with open(os.path.join(draft_dir, "research.md"), "w", encoding="utf-8") as handle:
         handle.write(research_block)
     print(f"           Validation report saved: {report_path}")
+    report["draft_dir"] = draft_dir
     return draft_dir
 
 
@@ -1803,6 +1804,39 @@ def split_brief(content):
 
 # ── Google Docs ───────────────────────────────────────────────────────────────
 
+def drive_doc_title(topic, content_type):
+    try:
+        short_title = summarize_title(topic)
+    except Exception as exc:
+        print(f"          Title summarisation failed, using raw topic: {exc}")
+        short_title = topic[:60]
+    return f"Content Brief: {short_title} [{content_type}]"
+
+
+def upload_unvalidated_draft(topic, content_type, report):
+    """Put a failed brief in the same Drive folder, marked UNVALIDATED with its failed
+    checks on top, so it can be shared and fixed instead of staying on one laptop."""
+    draft_dir = report.get("draft_dir")
+    path = os.path.join(draft_dir, "draft.md") if draft_dir else None
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        draft = re.sub(r"^<!--.*?-->\s*", "", handle.read(), flags=re.S)
+    if not draft.strip():
+        return None
+    failed = report.get("errors") or []
+    notice = ("**UNVALIDATED DRAFT: fix these before publication.**\n\n"
+              + "\n".join(f"- {e}" for e in failed) + "\n\n---\n\n")
+    print("           Uploading the unvalidated draft to Google Drive...")
+    try:
+        url = create_google_doc("[UNVALIDATED] " + drive_doc_title(topic, content_type), notice + draft)
+    except Exception as exc:
+        print(f"          Google Docs failed: {exc}. The draft stays in {draft_dir}")
+        return None
+    print(f"           Unvalidated draft in Drive: {url}")
+    return url
+
+
 def get_google_credentials():
     """Return valid Google OAuth2 credentials, refreshing or re-authorising as needed."""
     creds = None
@@ -2386,7 +2420,11 @@ def main():
             json.dump({'status':'unvalidated', 'keyword_resolution':keyword_resolution,
                        'checks':quality_report.get('checks', []), 'errors':quality_report.get('errors', [str(exc)])},
                       handle, indent=2, ensure_ascii=False)
+        upload_unvalidated_draft(topic, content_type, quality_report)
         sys.exit(1)
+    for check in quality_report.get('checks', []):
+        for warning in check.get('warnings', []):
+            print(f"           Warning ({check['id']}): {warning}")
 
     safe_title = re.sub(r"[^\w\s-]", "", topic[:50]).strip().replace(" ", "_")
     local_path = os.path.join(audit_dir, f"brief_{safe_title}.md")
@@ -2402,12 +2440,7 @@ def main():
     print("           Creating Google Doc...")
     print("           (A browser window may open for Google authentication)")
     print("           Summarising topic into doc title...")
-    try:
-        short_title = summarize_title(topic)
-    except Exception as exc:
-        print(f"          Title summarisation failed, using raw topic: {exc}")
-        short_title = topic[:60]
-    doc_title = f"Content Brief: {short_title} [{content_type}]"
+    doc_title = drive_doc_title(topic, content_type)
     try:
         doc_url = create_google_doc(doc_title, brief)
     except Exception as exc:

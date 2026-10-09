@@ -216,7 +216,8 @@ class SecondPressurePointsRunTests(unittest.TestCase):
         for title,*_ in bq.outline_parts(text)['h2s'][2:8]:
             text=text.replace(f'## {title}\n',f'## {title}\n\n'+' '.join(['detail']*90)+'\n',1)
         check=next(c for c in bq.run_checks(text,self.ctx) if c['id']=='brief_length')
-        if bq.brief_words(text)>bq.rules()['brief_length']['max_words']:
+        cfg=bq.rules()['brief_length']
+        if bq.brief_words(text)>cfg['max_words']*(1+cfg['overshoot_tolerance']):
             self.assertTrue(any('::h2_' in u for u in check['units']),check)
 
     def test_missing_h1_target_is_filled_within_the_tier(self):
@@ -355,3 +356,58 @@ class AimBelowCapTests(unittest.TestCase):
                             ' '.join(['note']*700)+'\n\n**Visual:** Table: billing model comparison.')
         check=next(c for c in bq.run_checks(padded,ctx) if c['id']=='brief_length')
         self.assertTrue(any('Rewrite it to about' in d for d in check['details']),check['details'])
+
+
+class OvershootToleranceTests(unittest.TestCase):
+    """Up to 10% over the cap passes with a warning (content team decision)."""
+
+    def _pad(self,words):
+        text,ctx,_=finished()
+        # Meta Elements has no section cap, so only the total moves.
+        return text.replace('### Page Goal',' '.join(['note']*words)+'\n\n### Page Goal',1),ctx
+
+    def test_within_tolerance_passes_with_warning(self):
+        text,ctx=self._pad(2500+150-bq.brief_words(finished()[0]))
+        check=next(c for c in bq.run_checks(text,ctx) if c['id']=='brief_length')
+        self.assertTrue(check['passed'],check)
+        self.assertTrue(check.get('warnings'))
+
+    def test_beyond_tolerance_fails(self):
+        text,ctx=self._pad(2500+400-bq.brief_words(finished()[0]))
+        self.assertIn('brief_length',failing(text,ctx))
+
+
+class UnvalidatedDraftUploadTests(unittest.TestCase):
+    """Failed briefs still reach the Drive folder, marked UNVALIDATED with their failures on top."""
+
+    def _namespace(self, calls):
+        import ast, os, pathlib
+        from unittest.mock import Mock
+        source = (pathlib.Path(__file__).resolve().parents[1] / "brief.py").read_text()
+        wanted = {"drive_doc_title", "upload_unvalidated_draft"}
+        body = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name in wanted]
+        ns = {"os": os, "re": re, "summarize_title": Mock(return_value="Multi-Tenant AI Databases"),
+              "create_google_doc": lambda title, content: calls.append((title, content)) or "https://docs.google.com/document/d/x/edit"}
+        exec(compile(ast.Module(body=body, type_ignores=[]), "brief.py", "exec"), ns)
+        return ns
+
+    def test_failed_draft_is_uploaded_with_its_failures(self):
+        import tempfile, os
+        calls = []
+        ns = self._namespace(calls)
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "draft.md"), "w") as f:
+                f.write("<!-- UNVALIDATED DRAFT: not approved. -->\n\n# Brief body")
+            url = ns["upload_unvalidated_draft"]("Best Database for Multi-Tenant AI Apps", "listicle",
+                                                 {"draft_dir": d, "errors": ["brief_length: Brief is 3200 words"]})
+        self.assertTrue(url.startswith("https://docs.google.com/"))
+        title, content = calls[0]
+        self.assertEqual(title, "[UNVALIDATED] Content Brief: Multi-Tenant AI Databases [listicle]")
+        self.assertIn("- brief_length: Brief is 3200 words", content)
+        self.assertIn("# Brief body", content)
+        self.assertNotIn("<!--", content)
+
+    def test_nothing_to_upload_without_a_draft(self):
+        calls = []
+        self.assertIsNone(self._namespace(calls)["upload_unvalidated_draft"]("T", "blog", {}))
+        self.assertEqual(calls, [])

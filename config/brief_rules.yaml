@@ -165,6 +165,8 @@ brief_length:
   max_words: 2500
   # When the brief is within max_words, a section fails only above cap x this factor.
   within_total_slack: 1.5
+  # Briefs up to this share over max_words pass with a warning (content team, Oct 2026).
+  overshoot_tolerance: 0.10
   section_max_words:
     Page Goal: 70
     Target Audience: 70

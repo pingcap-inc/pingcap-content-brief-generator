@@ -1548,9 +1548,12 @@ def _length_check(content, parts, found, template):
     cfg = {**rules()["brief_length"], "max_words": max_brief_words(template)}
     problems, units, sizes = [], [], {}
     total = brief_words(content)
-    # The section caps exist to keep the total under the limit. Within the total, a
-    # section fails only when it is badly oversized; over it, every cap is strict.
-    slack = 1.0 if total > cfg["max_words"] else cfg["within_total_slack"]
+    # Up to overshoot_tolerance over the cap passes with a warning; beyond it fails.
+    hard = int(cfg["max_words"] * (1 + cfg["overshoot_tolerance"]))
+    over = total > hard
+    # The section caps exist to keep the total under the limit. Within it, a section
+    # fails only when it is badly oversized; over it, every cap is strict.
+    slack = 1.0 if over else cfg["within_total_slack"]
     for name, (head, body, end) in sections(content).items():
         if name == OUTLINE:
             continue
@@ -1572,8 +1575,7 @@ def _length_check(content, parts, found, template):
     fixed += sum(brief_words(content[s:e]) for i, (_, s, e) in enumerate(parts["h2s"]) if i in caps)
     body = [i for i in range(len(parts["h2s"])) if i not in caps]
     share = (cfg["max_words"] - fixed) // len(body) if body else cfg["h2_max_words"]
-    h2_cap = (max(cfg["h2_min_words"], min(cfg["h2_max_words"], share)) if total > cfg["max_words"]
-              else cfg["h2_max_words"])
+    h2_cap = max(cfg["h2_min_words"], min(cfg["h2_max_words"], share)) if over else cfg["h2_max_words"]
     for i, (title, start, end) in enumerate(parts["h2s"]):
         outline.append((_section_unit(i), (start, end), caps.get(i) or h2_cap))
     for unit, (start, end), cap in outline:
@@ -1583,13 +1585,18 @@ def _length_check(content, parts, found, template):
                             f"Rewrite it to about {int(cap * cfg['repair_target_fraction'])} words: a Target line, "
                             "a one-sentence rationale, and 2 to 3 short guidance bullets; H3s are heading lines")
             units.append(unit)
-    if total > cfg["max_words"]:
-        problems.append(f"Brief is {total} words; maximum {cfg['max_words']}. Shorten the longest sections "
+    if over:
+        problems.append(f"Brief is {total} words; maximum {hard} ({cfg['max_words']} plus "
+                        f"{cfg['overshoot_tolerance']:.0%}). Shorten the longest sections "
                         f"so the brief lands near {int(cfg['max_words'] * cfg['repair_target_fraction'])} words")
         # Without a per-unit overrun, shorten the three longest units.
         if not units:
             units = sorted(sizes, key=sizes.get, reverse=True)[:3]
-    return _check("brief_length", problems, units)
+    check = _check("brief_length", problems, units)
+    if not over and total > cfg["max_words"]:
+        check["warnings"] = [f"Brief is {total} words, {total / cfg['max_words'] - 1:.0%} over the "
+                             f"{cfg['max_words']}-word target (within the {cfg['overshoot_tolerance']:.0%} tolerance)"]
+    return check
 
 
 def failures(checks):

@@ -22,6 +22,11 @@ Outputs a structured content brief to:
 
 - Google Docs (saved to a "Content Briefs" Drive folder)
 - Local .md file (always saved before Google Docs export)
+- Briefs that fail a check are still uploaded to the same Drive folder as
+  `[UNVALIDATED] Content Brief: ...`, with the failed checks listed at the top, and
+  kept locally in `brief_failed_*`. Set `DRIVE_FOLDER_ID` in `.env` to pin the folder.
+- Length: briefs aim for about 85% of the cap (2,500 words; 2,800 for listicles).
+  Up to 10% over the cap passes with a warning; beyond that the brief fails.
 
 ## Content types
 
