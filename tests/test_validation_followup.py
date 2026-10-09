@@ -149,3 +149,31 @@ class BriefLengthTests(unittest.TestCase):
             self.assertIn('2500 words',base)
             self.assertNotIn('at least 50%',base+checklist)
             self.assertNotIn('and a Visual line',checklist)
+
+
+class ApprovedBriefPatternTests(unittest.TestCase):
+    """Patterns learned from the approved PingCAP brief library (Drive, 2025-2026)."""
+
+    def _drop_in(self,text):
+        return [d for d in bq._facts_check(text)['details'] if d.startswith('tidb_mysql_compatible_not_drop_in')]
+
+    def test_drop_in_claim_is_rejected_but_question_is_allowed(self):
+        self.assertTrue(self._drop_in('TiDB is a drop-in replacement for MySQL.'))
+        self.assertEqual(self._drop_in('Is TiDB a drop-in replacement for MySQL?'),[])
+        self.assertEqual(self._drop_in('TiDB is not a drop-in replacement; test stored procedures.'),[])
+
+    def test_blog_template_matches_an_approved_guide_outline(self):
+        template=bq.template_for('blog')
+        titles=['What is persistent AI agent memory?','Why agent memory breaks in production','How does persistent memory work?',
+                'What teams get wrong about agent memory','Checklist for production-ready agent memory',
+                'Where TiDB fits for persistent agent memory','Build persistent agent memory with TiDB Cloud',
+                'Persistent AI agent memory FAQs']
+        found=bq.match_template_sections(titles,template)
+        self.assertEqual((found['tidb_fit'],found['closing'],found['faqs']),(5,6,7))
+        self.assertEqual(template['primary_cta_section'],'closing')
+
+    def test_listicle_table_is_a_spec_and_intro_is_answer_first(self):
+        base,_=bq.system_prompt_parts('listicle',{'url':'https://www.pingcap.com/ai/','anchor':'AI'},None)
+        self.assertIn('table SPEC, not a filled table',base)
+        self.assertIn('40 to 60 word',base)
+        self.assertIn('never call it a drop-in replacement',base)

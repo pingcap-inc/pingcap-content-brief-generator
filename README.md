@@ -105,7 +105,7 @@ Rules, templates and lists live in `config/`, not in code:
 | File | Holds |
 |---|---|
 | `config/brief_rules.yaml` | Meta limits, slug prefixes, intent labels, SERP depth, takeaway and FAQ limits, E-E-A-T terms, banned words, word-count tiers, internal-link weights |
-| `config/templates/*.yaml` | Page-type outlines (comparison/alternative, listicle, solution, default): required H2s, order, word weights, guidance. Comparison outlines follow the approved Aug 2026 comparison briefs; listicle outlines follow the live https://www.pingcap.com/compare/ listicles |
+| `config/templates/*.yaml` | Page-type outlines (comparison/alternative, listicle, blog, solution, default): required H2s, order, word weights, guidance. Comparison outlines follow the approved Aug 2026 comparison briefs; listicle outlines follow the live https://www.pingcap.com/compare/ listicles |
 | `config/prompts/*.md` | Base instructions and quality checklist, with `{{...}}` placeholders filled from the rules |
 | `config/customer_roster.yaml` | The only customers and URLs a brief may cite |
 | `config/product_facts.yaml` | Product facts the brief is checked against |

@@ -170,7 +170,7 @@ brief_length:
     CTAs: 90
     Word Count Target: 60
   outline_preamble_max_words: 300
-  h1_max_words: 170
+  h1_max_words: 190
   h2_max_words: 140
   faq_max_words: 220
 

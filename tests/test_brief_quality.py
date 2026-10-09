@@ -89,7 +89,7 @@ class ConfigTests(unittest.TestCase):
         self.assertNotIn("Verified customers with confirmed", source)
 
     def test_templates_and_weights(self):
-        for name in ["comparison", "listicle", "solution", "default"]:
+        for name in ["comparison", "listicle", "blog", "solution", "default"]:
             data = bq.load_yaml(f"templates/{name}.yaml")
             if data.get("word_weights"):
                 self.assertEqual(sum(data["word_weights"].values()), 100, name)
@@ -97,7 +97,8 @@ class ConfigTests(unittest.TestCase):
                 for pattern in spec["match"]:
                     re.compile(pattern)
         self.assertEqual(bq.template_for("alternative")["primary_cta_section"], "decision")
-        self.assertEqual(bq.template_for("blog")["content_types"], ["blog", "product", "playbook"])
+        self.assertEqual(bq.template_for("blog")["content_types"], ["blog"])
+        self.assertEqual(bq.template_for("product")["content_types"], ["product", "playbook"])
 
     def test_prompts_follow_house_style(self):
         for content_type in ["comparison", "listicle", "solution", "blog"]:

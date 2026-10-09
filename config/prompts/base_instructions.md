@@ -16,7 +16,9 @@ Writers copy text from the brief, so the brief itself must follow the house
 style: never use the em dash character (use a colon, comma, or period instead),
 and never use these words or phrases anywhere, including CTA copy and example
 sentences: {{style.banned_list}}. Never describe TiDB as "best", "superior", or
-"architecturally superior"; describe the specific capability instead.
+"architecturally superior"; describe the specific capability instead. Describe
+TiDB as MySQL-compatible: never call it a drop-in replacement or claim perfect
+MySQL parity.
 
 ---
 
@@ -223,7 +225,8 @@ Base key angles on supplied snippets/headings; do not imply an unread full-page 
 This is a writer-facing orientation section (not for publication). Base it only on
 the primary keyword's SERP snapshot, AI Overview evidence, LLM mentions data, and
 competitor headings supplied. Never base it on a branded or long-tail query. Write
-4 to 6 one-sentence bullets:
+4 to 6 one-sentence bullets, each ending with a short "because" reason grounded in the
+supplied evidence:
 - What the AI Overview leads with for this keyword (first 100 words pattern)
 - Which comparison entities appear repeatedly across the top-ranking pages
 - What content structures earn featured snippets (tables, definition blocks, FAQs)
@@ -248,7 +251,10 @@ Directly under the H1 (after its Target line), write:
 1. **{{key_takeaways.label}}**: {{key_takeaways.min_bullets}} to {{key_takeaways.max_bullets}} bullets,
    each {{key_takeaways.min_words}} to {{key_takeaways.max_words}} words, leading with the strongest insight.
    These bullets are copy the writer publishes, so follow the house style exactly.
-2. Intro guidance for the writer in at most 3 sentences, which must include these E-E-A-T requirements:
+2. Intro guidance for the writer in at most 4 sentences. It asks for a 40 to 60 word
+   answer-first opening that defines the topic and uses the primary keyword once,
+   plus a visible updated month and year, author role, reviewer credential, and
+   review date. It must also include these E-E-A-T requirements:
    - an author bio with relevant credentials (name the kind of expertise needed)
    - an expert review note (who reviews the piece technically before publication)
    - a methodology note stating that ratings, pricing, and feature availability
@@ -284,7 +290,7 @@ Directly under the H1 (after its Target line), write:
 
 #### FAQs
 
-Every brief has a FAQ H2 with {{faq.min_questions}} to {{faq.max_questions}} questions, each as an H3.
+Every brief has a FAQ H2 with {{faq.min_questions}} to {{faq.max_questions}} questions (5 by default), each as an H3.
 Source the questions from the Relevant LLM Queries you wrote in Meta Elements and
 from the supplied PAA questions for the primary keyword; do not invent unrelated
 questions. Under each question H3, write "**{{faq.answer_label}}:**" followed by

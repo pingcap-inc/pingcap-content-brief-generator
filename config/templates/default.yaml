@@ -1,6 +1,5 @@
-# Fallback for blog, product and playbook pages.
+# Fallback for product and playbook pages (blog posts use blog.yaml).
 content_types:
-- blog
 - product
 - playbook
 max_h2: 10

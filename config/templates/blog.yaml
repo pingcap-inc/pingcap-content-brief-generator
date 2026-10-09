@@ -1,0 +1,81 @@
+# Blog posts, guides and how-tos. The structure follows the approved PingCAP blog
+# briefs (Jun to Sep 2026: LangChain agent memory, LlamaIndex vector store,
+# multi-agent architecture, persistent AI agent memory, AI agent state, MCP server
+# persistence, serverless database guides). Product and playbook pages keep the
+# fallback template in default.yaml.
+content_types:
+- blog
+max_h2: 10
+faq_section: faqs
+primary_cta_section: closing
+mechanism_section: tidb_fit
+word_weights: null
+sections:
+- id: tidb_fit
+  label: Where TiDB fits (mechanism tied to the intro problem)
+  match:
+  - (?i)^(?:where|why|when) (?:tidb|pingcap)\b
+  - (?i)^how (?:tidb|pingcap)\b
+  requires_mechanism: true
+  required_terms:
+  - (?i)\bintro
+- id: closing
+  position: -2
+  label: Closing section with the single primary CTA
+  match:
+  - .
+- id: faqs
+  position: -1
+  label: '[Primary keyword] FAQs'
+  match:
+  - (?i)\bfaqs?\b
+  - (?i)frequently asked
+mechanisms:
+  - distributed SQL on TiKV
+  - TiKV
+  - Raft
+  - TiFlash
+  - HTAP
+  - native VECTOR type
+  - VECTOR
+  - vector search
+  - full-text search
+  - PD placement driver
+  - MVCC
+  - online DDL
+  - TiDB Cloud Zero
+  - TiDB Cloud Starter
+  - MySQL compatibility
+  - per-agent isolation
+guidance: |
+  For blog posts, guides, and how-tos, follow the approved PingCAP blog briefs.
+  Choose the variant from the title and search intent:
+
+  - **How-To** (the title starts with "How to", or the reader wants to build
+    something): H2 1 is the build section ("How to build [X] with [tool]") with a
+    numbered flow and one component table spec. No per-section word targets beyond
+    the supplied plan.
+  - **Guide / explainer** (everything else): H2 1 is the definition ("What is
+    [X]?"), followed by why it matters, how it works, and a "What teams get wrong"
+    or "When [X] is not enough" section.
+
+  Every blog outline has, in this order at the end:
+  1. **"Where TiDB fits" H2** (the heading starts "Where TiDB", "How TiDB", or
+     "How PingCAP", for example "How TiDB helps [problem]"), placed late. Define
+     the category first; introduce TiDB only after the reader understands the
+     problem. Name the actual mechanism and tie it back to the intro problem.
+  2. **Closing H2** that resolves the intro and holds the single primary CTA. Keep
+     the CTA restrained and aimed at mid-funnel technical evaluation.
+  3. **"[Primary keyword] FAQs"** as the last H2, with 5 questions.
+
+  Across the outline, include exactly one table spec (name the columns and 4 to 7
+  rows; do not fill the table) and exactly one checklist, the page's "single
+  actionable module" (an H2 or an H3, for example "Checklist for production-ready
+  [X]"). Write H2s as questions or how-to phrases that mirror search intent, 7 to
+  10 H2s in total. State what the technology does not do, as well as what it does.
+  Use realistic scenarios without invented metrics when no verified case study
+  is supplied.
+checklist: |
+  23. Blog briefs follow the How-To or Guide variant, have exactly one table spec
+      and exactly one checklist module, a late "Where TiDB fits" H2 naming a
+      mechanism, a closing H2 with the single primary CTA, and FAQs as the last H2.

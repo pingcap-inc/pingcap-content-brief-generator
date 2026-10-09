@@ -72,10 +72,12 @@ guidance: |
   **H2 2: At a glance comparison table**
   Title: "Compare the best [topic] at a glance"
   Target: use the corresponding supplied section budget.
-  Content: 7–8 row comparison table. Columns must include: Database, Best for,
-  key technical criteria relevant to the topic, Architecture type, Deployment
-  model, Key tradeoff, Getting started. A secondary CTA with a verified URL may follow
-  this table.
+  Content: a table SPEC, not a filled table, as in the approved listicle briefs.
+  Name the columns (Database, Best for, the 3 framework criteria from H2 4,
+  Architecture type, Deployment model, Key tradeoff, Getting started) and the 7 to
+  8 recommended options to compare. Say explicitly whether each option is
+  optimized for which workload class. The writer fills the cells. A secondary CTA
+  with a verified URL may follow this table.
 
   **H2 3: How to read the table**
   Title: "How should you read this [topic] table?"
