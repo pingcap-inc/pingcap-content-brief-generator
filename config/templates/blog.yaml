@@ -59,6 +59,12 @@ guidance: |
     [X]?"), followed by why it matters, how it works, and a "What teams get wrong"
     or "When [X] is not enough" section.
 
+  **Numbered titles** ("The Seven Pressure Points...", "5 Ways to..."): give each
+  promised item its own H2 and fold the definition into the H1 intro guidance
+  instead of a separate "What is" H2, so the outline stays within 10 H2s
+  (items + Where TiDB fits + closing + FAQs). Keep each item H2 to the same
+  shape: the symptom, why it happens, and the usual workaround's cost.
+
   Every blog outline has, in this order at the end:
   1. **"Where TiDB fits" H2** (the heading starts "Where TiDB", "How TiDB", or
      "How PingCAP", for example "How TiDB helps [problem]"), placed late. Define

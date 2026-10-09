@@ -948,6 +948,28 @@ def resolve_internal_link_ids(content):
     return content[:start] + table + content[end:]
 
 
+def unresolve_internal_link_ids(content):
+    """Turn rendered heading text back into h2_N IDs, so a repair that renames or
+    reorders H2s re-renders the link table against the repaired outline."""
+    sections = brief_sections(content)
+    outlines = [(body, end) for name, start, end, body in sections if name == "Outline / Headings"]
+    links = [(body, end) for name, start, end, body in sections if name == "Internal Links"]
+    if len(outlines) != 1 or len(links) != 1:
+        return content
+    start, end = outlines[0]
+    ids = {}
+    for line, fenced in markdown_lines(content[start:end]):
+        match = re.match(r"^##[ \t]+(.+)$", line)
+        if not fenced and match:
+            ids.setdefault(match.group(1).strip().strip("*"), f"h2_{len(ids) + 1}")
+    start, end = links[0]
+    def render(match):
+        key = match.group(2).strip().strip("*").strip()
+        return match.group(1) + ids.get(key, match.group(2)) + match.group(3)
+    table = re.sub(r"(?m)^([ \t]*\|[ \t]*)([^|\n]+?)([ \t]*\|)", render, content[start:end])
+    return content[:start] + table + content[end:]
+
+
 def parse_word_budget(text):
     """Read a standalone Target line; a single value is an exact min/max budget."""
     plain = text.replace("**", "").replace("__", "")
@@ -1002,7 +1024,7 @@ def validate_serp_blocks(outline):
     return errors
 
 
-def validate_brief(content, content_type, candidates, plan, ctx=None):
+def validate_brief(content, content_type, candidates, plan, ctx=None, existing_page=None):
     """Enforce observable structure and link constraints; editorial review is still needed.
 
     With a quality context (built by generate_brief from the Stage 0 resolution), the
@@ -1057,6 +1079,10 @@ def validate_brief(content, content_type, candidates, plan, ctx=None):
         "/compare/" if content_type == "comparison" else "/blog/" if content_type == "blog" else "/article/"
     )
     url_row = re.search(r"(?mi)^\|\s*URL Structure\s*\|\s*(.*?)\s*\|", meta)
+    existing = existing_page or (ctx or {}).get("existing_page")
+    if existing:
+        # A refresh keeps the live path; brief_quality checks the exact value.
+        prefix = urlparse(existing.get("final_url") or existing["url"]).path or "/"
     if not url_row or prefix not in url_row.group(1):
         errors.append("Incorrect content-type URL structure")
     links = bodies.get("Internal Links", "")
@@ -1222,6 +1248,10 @@ def generate_brief(topic, content_type, keyword_data, serp_results, paa_question
         research_block += ("\n## Primary CTA (verbatim)\n" + json.dumps(priority_link)
                            + "\n## Required Internal Links\n" + json.dumps(required_links or []) + "\n")
 
+    if ctx and ctx.get("existing_page"):
+        research_block += bq.refresh_brief_block(ctx["existing_page"])
+        report["existing_page"] = ctx["existing_page"]
+
     research_block += "\n## Word Count Plan (mandatory)\n" + json.dumps(plan, indent=2)
     research_block += "\n## SERP Features\n" + json.dumps(serp_features or {
         "status": "unavailable", "ai_overview": [], "featured_snippet": []
@@ -1328,7 +1358,8 @@ Null values mean unavailable, never a measured zero. Do not invent link-type rat
 
     def check(text):
         try:
-            structural = validate_brief(text, content_type, internal_link_candidates or [], plan)
+            structural = validate_brief(text, content_type, internal_link_candidates or [], plan,
+                                        existing_page=(ctx or {}).get("existing_page"))
             return bq.run_checks(text, ctx, structural) if quality else structural
         except Exception as exc:
             preserve_failure(text, 'Draft validation', exc)
@@ -1350,7 +1381,9 @@ Null values mean unavailable, never a measured zero. Do not invent link-type rat
         errors = bq.failures(checks) if quality else checks
         plan_units = bq.repair_plan(checks) if quality and errors else {}
         if plan_units and bq.rules()["repair"]["max_rounds"] >= 1:
-            # One regeneration of only the offending sections.
+            # One regeneration of only the offending sections. Link rows go back to h2_N
+            # IDs first, so renamed or reordered H2s re-render after the repair.
+            text = unresolve_internal_link_ids(text)
             try:
                 repair = ask(research_block + "\n\n---\n\n" + bq.repair_prompt(text, plan_units))
             except Exception as exc:
@@ -1978,6 +2011,8 @@ def main():
                         help="Primary CTA and required internal link URL (used verbatim)")
     parser.add_argument("--priority-link-anchor", required=True,
                         help="Anchor text for the priority link (used verbatim)")
+    parser.add_argument("--refresh-url", default=None,
+                        help="Refresh or optimize this live pingcap.com page instead of planning a new one")
     parser.add_argument("--required-links", default=None,
                         help="JSON file: list of {url, anchor, section} internal links to place")
     args = parser.parse_args()
@@ -2010,6 +2045,25 @@ def main():
             parser.error('Priority and required links must be HTTPS URLs on pingcap.com or www.pingcap.com.')
     if len({link['url'] for link in mandated}) != len(mandated):
         parser.error('Priority and required links must use distinct URLs.')
+    existing_page = None
+    if args.refresh_url:
+        parsed = urlparse(args.refresh_url.strip())
+        if parsed.scheme != 'https' or parsed.hostname not in {'pingcap.com', 'www.pingcap.com'}:
+            parser.error('--refresh-url must be an HTTPS URL on pingcap.com or www.pingcap.com.')
+        if args.refresh_url.strip() in {link['url'] for link in mandated}:
+            parser.error('--refresh-url cannot also be the priority or a required link.')
+        print("Refresh  Reading the live page...")
+        try:
+            existing_page = brief_quality.fetch_existing_page(args.refresh_url.strip())
+        except Exception as exc:
+            parser.error(f'cannot read --refresh-url: {exc}')
+        h2_count = sum(h['tag'] == 'H2' for h in existing_page['headings'])
+        print(f"           Status {existing_page['status']}; {h2_count} H2s, "
+              f"{existing_page['code_blocks']} code blocks, ~{existing_page['word_count']} words")
+        if existing_page['redirected']:
+            print(f"           Warning: redirects to {existing_page['final_url']}; the brief will flag it.")
+        if existing_page['status'] >= 400:
+            print("           Warning: the live page did not load; the brief will plan a revival.")
     validate_env()
     print("Stage 0  Resolving the primary keyword...")
     try:
@@ -2141,14 +2195,18 @@ def main():
         )
         link_rules = quality_rules["internal_links"]
         # Validation rejects case studies outside the customer roster, so never offer them.
-        inventory_pages = [p for p in inventory_pages if brief_quality.link_allowed(p.get("url", ""))]
+        # A refreshed page never links to itself.
+        own = {u.rstrip("/") for u in ((existing_page or {}).get("url", ""), (existing_page or {}).get("final_url", "")) if u}
+        inventory_pages = [p for p in inventory_pages if brief_quality.link_allowed(p.get("url", ""))
+                           and p.get("url", "").rstrip("/") not in own]
         internal_link_candidates = select_internal_link_candidates(
             inventory_pages,
             search_keyword,
             content_type,
             max_links=link_rules["max_links"],
             path_weights=link_rules["path_weights"],
-            target_path=brief_quality.page_url(content_type, search_keyword),
+            target_path=(urlparse(existing_page["final_url"]).path if existing_page
+                         else brief_quality.page_url(content_type, search_keyword)),
             same_directory_weight=link_rules["same_directory_weight"],
         )
         internal_link_candidates = validate_internal_link_candidates(
@@ -2294,7 +2352,8 @@ def main():
         entities = {}
     quality_context = {"url_verifier": url_verifier, "case_study_text": case_study_text,
                        "competitor": entities.get("competitor") or None,
-                       "serp_source_keyword": serp_features["source_keyword"]}
+                       "serp_source_keyword": serp_features["source_keyword"],
+                       "existing_page": existing_page}
     quality_report = {}
     try:
         brief = generate_brief(

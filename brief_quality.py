@@ -5,7 +5,9 @@ config/. This module only interprets it. The model writes prose; anything that c
 be computed (slug, target keyword, intent, supporting keywords, Total MSV, empty-data
 notes, CTA pruning, claim markers) is set here and then checked like everything else.
 """
+import json
 import re
+from html.parser import HTMLParser
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
@@ -91,6 +93,162 @@ def slugify(keyword):
 def page_url(content_type, keyword):
     prefixes = rules()["meta"]["slug_prefixes"]
     return prefixes.get(content_type, prefixes["default"]) + slugify(keyword)
+
+
+def target_url(ctx, keyword):
+    """A refresh keeps the live page's path; a new page gets a slug from the keyword."""
+    existing = ctx.get("existing_page")
+    if existing:
+        return urlparse(existing.get("final_url") or existing["url"]).path or "/"
+    return page_url(ctx["content_type"], keyword)
+
+
+# ── Refresh mode: the live page being optimized ─────────────────────────────
+
+class _PageReader(HTMLParser):
+    """Headings, title, meta description, code blocks and words of a live page,
+    ignoring site chrome (header, nav, footer, aside)."""
+    CHROME = {"header", "nav", "footer", "aside"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.headings, self.title, self.description = [], "", ""
+        self.code_blocks = self.images = self.words = 0
+        self._chrome = self._skip = 0
+        self._tag, self._text, self._in_title = None, [], False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag in self.CHROME:
+            self._chrome += 1
+        if tag in ("script", "style", "noscript"):
+            self._skip += 1
+        if tag == "title":
+            self._in_title = True
+        if tag == "meta" and (attrs.get("name") or "").casefold() == "description":
+            self.description = " ".join((attrs.get("content") or "").split())
+        if self._chrome:
+            return
+        if tag in ("h1", "h2", "h3", "h4"):
+            self._tag, self._text = tag, []
+        elif tag == "pre":
+            self.code_blocks += 1
+        elif tag == "img":
+            self.images += 1
+
+    def handle_endtag(self, tag):
+        if tag in self.CHROME and self._chrome:
+            self._chrome -= 1
+        if tag in ("script", "style", "noscript") and self._skip:
+            self._skip -= 1
+        if tag == "title":
+            self._in_title = False
+        if tag == self._tag:
+            text = " ".join("".join(self._text).split())
+            if text:
+                self.headings.append({"tag": tag.upper(), "text": text})
+            self._tag = None
+
+    def handle_data(self, data):
+        if self._in_title:
+            self.title += data
+        if self._skip:
+            return
+        if self._tag:
+            self._text.append(data)
+        if not self._chrome:
+            self.words += len(data.split())
+
+
+def parse_existing_page(html, url, final_url=None, status=200):
+    reader = _PageReader()
+    reader.feed(html or "")
+    # Blog templates end the article at "Related Resources"; later headings are widgets.
+    markers = [re.compile(m) for m in rules()["refresh"]["end_of_article"]]
+    end = next((i for i, h in enumerate(reader.headings) if any(m.search(h["text"]) for m in markers)),
+               len(reader.headings))
+    reader.headings = reader.headings[:end]
+    final = final_url or url
+    return {"url": url, "final_url": final, "status": status,
+            "redirected": urlparse(final).path.rstrip("/") != urlparse(url).path.rstrip("/"),
+            "title": " ".join(reader.title.split()), "meta_description": reader.description,
+            "headings": reader.headings, "code_blocks": reader.code_blocks,
+            "images": reader.images, "word_count": reader.words}
+
+
+def fetch_existing_page(url, get=None):
+    import requests
+    get = get or requests.get
+    response = get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (PingCAP brief generator)"},
+                   allow_redirects=True)
+    html = response.text if response.status_code < 400 else ""
+    return parse_existing_page(html, url, getattr(response, "url", url) or url, response.status_code)
+
+
+def _norm_heading(text):
+    return " ".join(re.findall(r"[a-z0-9]+", (text or "").casefold()))
+
+
+def refresh_brief_block(existing):
+    """Research-block instructions for a refresh; the format mirrors the approved refresh briefs."""
+    cfg = rules()["refresh"]
+    return (f"""
+---
+
+## Refresh Mode: Existing Page (authoritative)
+
+This brief optimizes a live page. Do not plan a new page. The generator sets URL
+Structure to the existing path; keep the URL to retain its equity. Live page data:
+```json
+{json.dumps(existing, indent=2)}
+```
+
+Refresh rules (they override the new-page outline rules where they conflict):
+- Directly under the H1, add one line: **{cfg['current_label']}:** [the live H1, or "none"].
+- Directly under every article H2, add two lines before the Target line:
+  **{cfg['current_label']}:** [the exact live heading text and level, e.g. "Why sharding fails (H2)",
+  or "none (new section)"] and **{cfg['change_label']}:** one of {", ".join(cfg['change_values'])}
+  (for Merge, name the live headings merged in). The Rationale explains the change in
+  SEO or LLM-retrieval terms; for Keep, it says why the section already works.
+- H3s stay heading lines, with the live heading in parentheses: "### New wording (Current: old wording)",
+  or "(New)".
+- Every live H2 must be accounted for: either as a {cfg['current_label']} line under an
+  outline H2, or in a bullet list titled "**{cfg['removed_label']}:**" placed in the H1
+  intro guidance, one bullet per removed or merged heading with a one-line reason.
+- Preserve existing code blocks, diagrams and technical substance unless outdated; say
+  what to update (versions, product tiers). Keep the author's voice on thought-leadership posts.
+- In Technical Notes, state what to preserve, what to update, and flag the URL status
+  if the live page redirects or did not return 200.
+""")
+
+
+def _refresh_check(content, ctx, parts):
+    existing = ctx.get("existing_page")
+    if not existing:
+        return None
+    cfg = rules()["refresh"]
+    label = re.compile(rf"(?mi)^\W*{re.escape(cfg['current_label'])}\W*:")
+    problems, units = [], []
+    if parts.get("h1"):
+        start, end = parts["h1"]
+        intro = re.split(r"(?m)^#{2,}\s", content[start:end], maxsplit=1)[0]
+        if not label.search(intro):
+            problems.append(f"The H1 needs a '{cfg['current_label']}:' line with the live H1")
+            units.append(OUTLINE + "::h1")
+    for i, (title, start, end) in enumerate(parts["h2s"]):
+        body = re.split(r"(?m)^#{3,}\s", content[start:end].split("\n", 1)[-1], maxsplit=1)[0]
+        if not label.search(body) or not re.search(rf"(?mi)^\W*{re.escape(cfg['change_label'])}\W*:", body):
+            problems.append(f"{title!r} needs '{cfg['current_label']}:' and '{cfg['change_label']}:' lines")
+            units.append(_section_unit(i))
+    outline = _norm_heading(content[parts["start"]:parts["end"]])
+    missing = [h["text"] for h in existing.get("headings", [])
+               if h["tag"] == "H2" and _norm_heading(h["text"]) not in outline]
+    for heading in missing:
+        problems.append(f"Live H2 {heading!r} is not accounted for; map it with '{cfg['current_label']}:' "
+                        f"or list it under '{cfg['removed_label']}:'")
+    if missing:
+        units.append(OUTLINE + "::h1" if parts.get("h1") else OUTLINE + "::preamble")
+    return _check("refresh_mapping", problems, units)
 
 
 def intent_label(search_intent):
@@ -522,7 +680,7 @@ def apply_deterministic(content, ctx):
             ("Search Intent", intent_label(resolution["search_intent"]), "Target Keyword"),
             ("Supporting Keywords", cell, "Search Intent"),
             ("Total MSV", f"{total:,} (primary {resolution['primary_metrics']['msv']:,} + supporting{total_note})", "Supporting Keywords"),
-            ("URL Structure", page_url(ctx["content_type"], primary), "Meta Description")]:
+            ("URL Structure", target_url(ctx, primary), "Meta Description")]:
         content = _set_meta_row(content, label, value, after)
 
     template = template_for(ctx['content_type'])
@@ -670,7 +828,7 @@ def run_checks(content, ctx, structural_errors=()):
     expected_intent = intent_label(resolution["search_intent"])
     checks.append(_check("meta_search_intent", [] if meta.get("Search Intent") == expected_intent else
                          [f"Search Intent must be {expected_intent!r}"], ["Meta Elements"]))
-    expected_url = page_url(ctx["content_type"], primary)
+    expected_url = target_url(ctx, primary)
     checks.append(_check("url_slug", [] if (meta.get("URL Structure") or "").strip("`") == expected_url else
                          [f"URL Structure must be {expected_url}"], ["Meta Elements"]))
     m = cfg["meta"]
@@ -818,6 +976,11 @@ def run_checks(content, ctx, structural_errors=()):
     # 11. Fact-check pass.
     checks.append(_facts_check(content))
     checks.append(_sql_check(content))
+
+    # Refresh mode: every heading maps to the live page.
+    refresh = _refresh_check(content, ctx, parts)
+    if refresh:
+        checks.append(refresh)
 
     # 12. Brief length: the brief stays a scannable plan, not a draft article.
     checks.append(_length_check(content, parts, found, template))

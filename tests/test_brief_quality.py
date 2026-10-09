@@ -404,7 +404,7 @@ class CheckTests(unittest.TestCase):
 def brief_namespace():
     """Execute the production brief.py functions without its credential-bound imports."""
     tree = ast.parse((ROOT / "brief.py").read_text())
-    wanted = {"validate_serp_blocks", "markdown_lines", "resolve_internal_link_ids", "parse_word_budget",
+    wanted = {"validate_serp_blocks", "markdown_lines", "resolve_internal_link_ids", "unresolve_internal_link_ids", "parse_word_budget",
               "normalize_brief_headings", "word_count_plan", "brief_sections", "validate_brief",
               "generate_brief", "_save_failed_brief", "build_system_prompt", "_BRIEF_SECTIONS"}
     body = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted or
