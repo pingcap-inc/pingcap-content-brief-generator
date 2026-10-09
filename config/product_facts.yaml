@@ -1,6 +1,16 @@
 # Product facts the brief is checked against. Each check type is implemented
 # in brief_quality.py: forbidden_pattern, number_in_context, sql_vector_nullsafe.
 facts:
+  - id: tidb_mysql_compatible_not_drop_in
+    statement: >-
+      TiDB is MySQL-compatible (protocol, syntax, drivers, most tools), not a
+      drop-in replacement with perfect parity. Say "MySQL-compatible" and tell the
+      writer to validate unsupported features. A question such as "Is TiDB a
+      drop-in replacement for MySQL?" is fine; the answer must say what to test.
+    checks:
+      - type: forbidden_pattern
+        pattern: '(?i)\btidb\b[^.\n|?]{0,40}\b(?:is|as|works as|serves as|acts as)\s+(?:a\s+|an\s+)?(?:true\s+|full\s+)?drop-in\b'
+        message: TiDB is MySQL-compatible, not a drop-in replacement; describe compatibility and what to test.
   - id: mariadb_vector_support
     statement: >-
       MariaDB has a native VECTOR type from 11.7.1. Do not claim MariaDB has no
@@ -10,6 +20,8 @@ facts:
     checks:
       - type: forbidden_pattern
         pattern: '(?i)\bmariadb\b[^.\n|]{0,70}\b(?:has no|lacks|does not support)\b[^.\n|]{0,40}\b(?:native vector|vector type)\b'
+        # Version-qualified sentences ("before 11.7.1") are the correct form.
+        allow_if: '(?i)\b(?:prior to|before|earlier than|older than)\b[^.\n|]{0,30}\b(?:11\.7|version)'
         message: MariaDB has native VECTOR support from 11.7.1; specify the version being compared.
   - id: tidb_cloud_zero_api
     statement: >-

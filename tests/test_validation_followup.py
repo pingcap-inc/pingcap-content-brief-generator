@@ -35,18 +35,29 @@ class FollowupTests(unittest.TestCase):
 
     def test_equivalent_tidb_column_is_normalized(self):
         text,ctx,_=finished(ctx=context(competitor='Supabase'))
-        text=text.replace('| Criteria | TiDB | Supabase |','| Category | TiDB product | Supabase |')
+        text=text.replace('| Category | Supabase | TiDB product | Best fit |','| Criteria | Supabase | TiDB | Best fit |')
         corrected,_=bq.apply_deterministic(text,ctx)
-        self.assertIn('| Criteria | TiDB | Supabase |',corrected)
+        self.assertIn('| Category | Supabase | TiDB product | Best fit |',corrected)
+
+    def test_swapped_product_columns_are_reordered(self):
+        text,ctx,_=finished(ctx=context(competitor='Supabase'))
+        row='| Database model | Managed Postgres per project | TiDB Cloud Zero distributed SQL, MySQL compatible | Supabase for Postgres teams; TiDB for MySQL ecosystems |'
+        cells=row.strip('|').split('|')
+        swapped=text.replace('| Category | Supabase | TiDB product | Best fit |','| Category | TiDB product | Supabase | Best fit |').replace(
+            row,'|'+'|'.join([cells[0],cells[2],cells[1],cells[3]])+'|')
+        corrected,_=bq.apply_deterministic(swapped,ctx)
+        self.assertIn('| Category | Supabase | TiDB product | Best fit |',corrected)
+        self.assertIn('| Database model | Managed Postgres per project | TiDB Cloud Zero',corrected)
+        self.assertNotIn('section_at_a_glance',failing(corrected,ctx))
 
     def test_bare_domains_do_not_count_as_source_urls(self):
         spec=bq.glance_spec(bq.template_for('comparison'))
-        text='| Criteria | TiDB | MariaDB |\n|---|---|---|\n**Sources:** mariadb.com/kb/ (verify before publication)'
+        text='| Category | MariaDB | TiDB product | Best fit |\n|---|---|---|---|\n**Sources:** mariadb.com/kb/ (verify before publication)'
         self.assertTrue(any('https://' in p for p in bq._glance_problems(text,spec,'MariaDB')))
 
     def test_unqualified_false_vector_claim_is_rejected(self):
         spec=bq.glance_spec(bq.template_for('comparison'))
-        text='| Criteria | TiDB | MariaDB |\n|---|---|---|\n| Vector support | VECTOR | No native VECTOR type |'
+        text='| Category | MariaDB | TiDB product | Best fit |\n|---|---|---|---|\n| Vector support | No native VECTOR type | VECTOR | Version-specific |'
         self.assertTrue(any('11.7.1' in p for p in bq._glance_problems(text,spec,'MariaDB')))
 
     def test_repeated_technical_link_topic_is_not_discarded(self):
@@ -66,24 +77,103 @@ class FollowupTests(unittest.TestCase):
 
 
 class CompareHouseFormatTests(unittest.TestCase):
-    """Comparison and listicle outlines follow the live pingcap.com/compare/ pages."""
+    """Comparisons follow the approved Aug 2026 briefs; listicles follow the live /compare/ pages."""
 
-    def test_comparison_leads_with_glance_and_closes_with_faqs(self):
+    def test_comparison_follows_the_approved_briefs(self):
         template=bq.template_for('comparison')
-        titles=['TiDB vs OceanBase at a Glance','What Makes TiDB and OceanBase Architecturally Different?',
-                'How Do TiDB and OceanBase Compare on Compatibility and Migration?',
-                'Which Database Performs Better as Workloads Grow?',
-                'Which Platform Is Better for AI and Vector Workloads?',
-                'Which Platform Is Easier to Run in Cloud-Native Environments?',
-                'How Should Buyers Compare Pricing Models and Total Cost?',
-                'Who Should Choose TiDB vs OceanBase?','How TiDB Helps Teams Outgrow OceanBase Limits',
-                'TiDB vs OceanBase FAQs']
-        found=bq.match_template_sections(titles,template)
-        self.assertEqual([found[s['id']] for s in template['sections']],list(range(10)))
-        self.assertEqual(bq.glance_spec(template)['columns'],['Criteria','TiDB','{competitor}'])
+        self.assertEqual(bq.glance_spec(template)['columns'],['Category','{competitor}','TiDB product','Best fit'])
+        ids=[s['id'] for s in template['sections']]
+        self.assertEqual(ids[:2],['aeo_answer','at_a_glance'])
+        self.assertIn('reviews',ids)
+        self.assertEqual(ids[-2:],['faqs','decision'])
 
     def test_listicle_spotlight_uses_live_heading(self):
         template=bq.template_for('listicle')
         spec=next(s for s in template['sections'] if s['id']=='tidb_spotlight')
         import re
         self.assertTrue(any(re.search(p,'When Is TiDB the Best HTAP Database?') for p in spec['match']))
+
+
+class SecondMariaDBRunTests(unittest.TestCase):
+    """Failures from the "mariadb alternative" run (brief_failed_yw9rjm43)."""
+
+    def _vector_problems(self,text):
+        return [d for d in bq._facts_check(text)['details'] if d.startswith('mariadb_vector_support')]
+
+    def test_version_qualified_vector_guardrail_is_not_a_false_claim(self):
+        guard=('Do not claim MariaDB has no native vector support without specifying that this '
+               'limitation applies only to versions prior to 11.7.1.')
+        self.assertEqual(self._vector_problems(guard),[])
+        self.assertEqual(self._vector_problems('Teams on MariaDB 10.11 lack native vector support before version 11.7.'),[])
+        self.assertTrue(self._vector_problems('MariaDB has no native vector support, so use TiDB.'))
+        self.assertTrue(self._vector_problems('MariaDB lacks native vector support. Version 11.7.1 is not covered here.'))
+
+    def test_non_roster_case_studies_are_never_offered_as_links(self):
+        roster_url=bq.roster()[0]['url']
+        self.assertTrue(bq.link_allowed(roster_url))
+        self.assertFalse(bq.link_allowed('https://www.pingcap.com/case-study/zalopay-using-a-scale-out-mysql-alternative-to-serve-millions-of-users/'))
+        self.assertTrue(bq.link_allowed('https://www.pingcap.com/case-studies/'))
+        self.assertTrue(bq.link_allowed('https://www.pingcap.com/compare/mysql-compatible-database/'))
+
+
+class BriefLengthTests(unittest.TestCase):
+    """Briefs stay within the approved sample length (about 2,500 words) for every type."""
+
+    def test_fixture_is_within_length(self):
+        text,ctx,_=finished()
+        self.assertNotIn('brief_length',failing(text,ctx))
+        self.assertLessEqual(bq.brief_words(text),bq.rules()['brief_length']['max_words'])
+
+    def test_overlong_h2_is_sent_to_repair(self):
+        text,ctx,_=finished()
+        padded=text.replace('**Visual:** Table: billing model comparison.',
+                            ' '.join(['Explain the billing model in more depth.']*40)+'\n\n**Visual:** Table: billing model comparison.')
+        check=next(c for c in bq.run_checks(padded,ctx) if c['id']=='brief_length')
+        self.assertFalse(check['passed'])
+        self.assertEqual(check['units'],['Outline / Headings::h2_7'])
+
+    def test_overlong_brief_is_rejected(self):
+        text,ctx,_=finished()
+        filler=' '.join(['word']*600)
+        padded=text
+        for unit in ('**Rationale**: Architecture queries','**Rationale**: Developers check','**Rationale**: Scale and availability',
+                     '**Rationale**: AI queries'):
+            padded=padded.replace(unit,'```\n'+filler+'\n```\n'+unit)
+        self.assertNotIn('brief_length',failing(padded,ctx),'fenced code is not counted')
+        long=text.replace('### Schema Markup Recommendations',(filler+'\n\n')*1+'### Schema Markup Recommendations')
+        self.assertIn('brief_length',failing(long,ctx))
+
+    def test_prompt_states_the_cap(self):
+        for content_type in ['comparison','listicle','solution','blog']:
+            base,checklist=bq.system_prompt_parts(content_type,{'url':'https://www.pingcap.com/ai/','anchor':'AI'},'Supabase')
+            self.assertIn('2500 words',base)
+            self.assertNotIn('at least 50%',base+checklist)
+            self.assertNotIn('and a Visual line',checklist)
+
+
+class ApprovedBriefPatternTests(unittest.TestCase):
+    """Patterns learned from the approved PingCAP brief library (Drive, 2025-2026)."""
+
+    def _drop_in(self,text):
+        return [d for d in bq._facts_check(text)['details'] if d.startswith('tidb_mysql_compatible_not_drop_in')]
+
+    def test_drop_in_claim_is_rejected_but_question_is_allowed(self):
+        self.assertTrue(self._drop_in('TiDB is a drop-in replacement for MySQL.'))
+        self.assertEqual(self._drop_in('Is TiDB a drop-in replacement for MySQL?'),[])
+        self.assertEqual(self._drop_in('TiDB is not a drop-in replacement; test stored procedures.'),[])
+
+    def test_blog_template_matches_an_approved_guide_outline(self):
+        template=bq.template_for('blog')
+        titles=['What is persistent AI agent memory?','Why agent memory breaks in production','How does persistent memory work?',
+                'What teams get wrong about agent memory','Checklist for production-ready agent memory',
+                'Where TiDB fits for persistent agent memory','Build persistent agent memory with TiDB Cloud',
+                'Persistent AI agent memory FAQs']
+        found=bq.match_template_sections(titles,template)
+        self.assertEqual((found['tidb_fit'],found['closing'],found['faqs']),(5,6,7))
+        self.assertEqual(template['primary_cta_section'],'closing')
+
+    def test_listicle_table_is_a_spec_and_intro_is_answer_first(self):
+        base,_=bq.system_prompt_parts('listicle',{'url':'https://www.pingcap.com/ai/','anchor':'AI'},None)
+        self.assertIn('table SPEC, not a filled table',base)
+        self.assertIn('40 to 60 word',base)
+        self.assertIn('never call it a drop-in replacement',base)

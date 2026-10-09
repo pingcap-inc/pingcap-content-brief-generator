@@ -64,7 +64,7 @@ guidance: |
   Pain must be specific to the target vertical, with no generic "legacy databases
   are slow" statements. Reference actual failure modes (e.g. "batch ETL kills
   real-time visibility", "manual sharding fragments logistics data").
-  Rationale: 2 sentences: search intent captured, then urgency established.
+  Rationale: one sentence: the search intent captured and the urgency it establishes.
 
   **H2 2: TiDB solution positioning**
   Title pattern: "TiDB: [specific capability] for [use case]"
@@ -74,7 +74,7 @@ guidance: |
   consensus, HTAP, PD placement driver, MVCC. Each H3 ends with a concrete
   outcome the buyer can expect (metric, capability, or architectural benefit).
   Do NOT list generic features; connect every capability to the vertical.
-  Rationale: 2 sentences.
+  Rationale: one sentence.
 
   **H2 3: Use cases**
   Title pattern: "Solution use cases: [specific scenarios for this vertical]"
@@ -86,7 +86,7 @@ guidance: |
   Use cases must be specific to the vertical, not generic ("real-time inventory
   management", not "real-time analytics"). Each use case should connect to a
   buying scenario and ideally map to a longer-form playbook that could be built.
-  Rationale: 2 sentences.
+  Rationale: one sentence.
 
   **H2 4: Architecture (technical evaluator section)**
   Title pattern: "Architecture: [how TiDB enables the vertical capability]"
@@ -98,7 +98,7 @@ guidance: |
   Use at most one shared architecture diagram for these three H3s. Include sample SQL queries or code
   snippets relevant to the vertical. This section is for architects and
   engineers, so be technically specific.
-  Rationale: 2 sentences.
+  Rationale: one sentence.
 
   **H2 5: Social proof / customer evidence** (conditional on relevant verified evidence)
   Title pattern: "Proven [vertical] results: customers and social proof"
@@ -112,7 +112,7 @@ guidance: |
   - H3 2: Second customer vignette (before/after architecture, 2–3 sentences)
   - H3 3: Logos, pull quotes, and third-party recognition (G2, Gartner Peer
     Insights, awards). Verify all ratings before publication.
-  Rationale: 2 sentences.
+  Rationale: one sentence.
 
   **H2 6: Interactive tools** (include when vertically relevant)
   Title pattern: "Interactive tools: explore [scale/cost/latency] for your [vertical]"
@@ -124,7 +124,7 @@ guidance: |
   Include specific slider parameters and output metrics relevant to the vertical.
   Note: this section requires engineering implementation; flag it as an
   interactive element requiring lazy loading for Core Web Vitals.
-  Rationale: 2 sentences. Omit this section if the vertical has no clear
+  Rationale: one sentence. Omit this section if the vertical has no clear
   interactive tool angle.
 
   **H2 7: Adoption journey**
@@ -138,7 +138,7 @@ guidance: |
   - Step 4: Optimize and expand (advanced capabilities, co-build roadmap)
   Include a visual suggestion: timeline with swimlanes for app, data, and infra
   teams. This section reduces perceived migration risk.
-  Rationale: 2 sentences.
+  Rationale: one sentence.
 
   **H2 8: Resources and thought leadership**
   Title pattern: "Resources on [vertical capability] with TiDB"
@@ -148,7 +148,7 @@ guidance: |
   - Technical deep dives (HTAP, zero-ETL, real-time architecture blogs/webinars)
   - Best practices and checklists (architecture diagrams, design guides)
   All links must be verified pingcap.com URLs; do not invent paths.
-  Rationale: 2 sentences.
+  Rationale: one sentence.
 
   **H2 9: FAQs** (placed before the closing CTA)
   Follow the FAQ rules above.
@@ -162,7 +162,7 @@ guidance: |
   - H3 3: Docs, SDKs, and reference implementations (for developers evaluating)
   Each H3 names the role it targets. The single primary CTA (the supplied
   priority link) sits in this H2; the role-based H3s use secondary CTAs.
-  Rationale: 2 sentences.
+  Rationale: one sentence.
 
   **Solution page URL structure:** Always /solutions/[slug]/
   Examples: /solutions/fintech/ /solutions/real-time-logistics-data-platform/

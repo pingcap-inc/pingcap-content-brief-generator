@@ -1,84 +1,93 @@
-# Comparison ("TiDB vs X") and alternative pages. The structure mirrors the live
-# pages under https://www.pingcap.com/compare/ (for example tidb-vs-oceanbase,
-# tidb-vs-postgresql-2026-comparison-guide, vitess-vs-tidb, mysql-vs-tidb).
-# Sections are matched to article H2s by the `match` patterns (case-insensitive
-# regex on the heading text), and must appear in this order.
+# Comparison and alternative pages, following the approved PingCAP comparison
+# briefs (Supabase alternative, PlanetScale alternatives, MongoDB vs MySQL, Aug
+# 2026). Sections are matched to article H2s by the `match` patterns
+# (case-insensitive regex on the heading text).
 content_types: [comparison, alternative]
 max_h2: 10
-# The FAQ H2 closes the page, as on the live /compare/ pages.
+# The FAQ H2 sits immediately before the closing H2.
 faq_section: faqs
-primary_cta_section: how_tidb_helps
-mechanism_section: how_tidb_helps
+primary_cta_section: decision
+mechanism_section: how_tidb_solves
 
 # Word budget weights, in outline order. Must sum to 100.
 word_weights:
   H1 introduction: 6
-  At a glance: 12
-  Architecture: 11
-  Compatibility and migration: 10
-  Scaling, performance, and availability: 11
-  HTAP, analytics, and AI workloads: 9
-  Operations and ecosystem: 9
-  Pricing and total cost: 8
-  Who should choose: 8
-  How TiDB helps: 9
-  FAQs: 7
+  AEO answer: 8
+  At a glance: 9
+  Capabilities comparison: 11
+  Integrations and developer workflow: 10
+  Deployment, governance, multi-tenant architecture: 9
+  Support, reviews, market signals: 7
+  Pricing: 8
+  How TiDB solves: 12
+  FAQs: 8
+  Decision endcap: 12
 
 sections:
-  - id: at_a_glance
+  - id: aeo_answer
     position: 1
-    label: TiDB vs [Competitor] at a glance
-    match: ['(?i)at[- ]a[- ]glance', '(?i)side[- ]by[- ]side']
-    key_differences: true
+    label: AEO answer
+    match: ['.']
+  - id: at_a_glance
+    position: 2
+    label: At a glance
+    match: ['(?i)at a glance']
+    # The validated table lives in the brief, so this H2 gets more room.
+    max_words: 320
     table:
-      columns: [Criteria, TiDB, "{competitor}"]
-      min_rows: 9
-      max_rows: 11
+      columns: [Category, "{competitor}", TiDB product, Best fit]
+      min_rows: 8
+      max_rows: 10
       required_categories:
-        - {id: primary_use, label: primary use / best fit, match: '(?i)primary use|best fit'}
-        - {id: architecture, label: architecture, match: '(?i)architect|database model'}
-        - {id: compatibility, label: SQL / protocol compatibility, match: '(?i)compatib|sql dialect|protocol'}
-        - {id: consistency, label: consistency & transactions, match: '(?i)consisten|transaction|acid'}
-        - {id: scaling, label: scaling model, match: '(?i)scal|shard'}
-        - {id: analytics, label: HTAP / analytics, match: '(?i)htap|analytic'}
-        - {id: availability, label: high availability / multi-region, match: '(?i)availab|multi[- ]region|locality|replication'}
-        - {id: operations, label: operations / Kubernetes / deployment, match: '(?i)operation|kubernetes|deploy'}
-        - {id: pricing_model, label: pricing model, match: '(?i)pricing|cost'}
+        - {id: database_model, label: database model, match: '(?i)database model|data model'}
+        - {id: vector_support, label: vector support, match: '(?i)vector'}
+        - {id: auth, label: auth, match: '(?i)\bauth'}
+        - {id: storage, label: storage, match: '(?i)storage'}
+        - {id: mcp_ai_tooling, label: MCP/AI tooling workflow, match: '(?i)\bmcp\b|ai tooling'}
+        - {id: setup, label: setup/provisioning, match: '(?i)setup|provisioning'}
+        - {id: multi_tenant, label: multi-tenant scale, match: '(?i)multi[- ]tenan'}
+        - {id: operational_tradeoffs, label: operational tradeoffs, match: '(?i)operational|tradeoff'}
+        - {id: pricing_model, label: pricing model, match: '(?i)pricing'}
       # A competitor cell may not be blank or a placeholder.
       empty_cell_pattern: '^(?:|-+|n/?a|none|no|unknown|not available|tbd)$'
       requires_sources: true
-  - id: architecture
-    label: architecture
-    match: ['(?i)architect']
-  - id: compatibility
-    label: compatibility and migration
-    match: ['(?i)compatib', '(?i)migrat']
-  - id: scaling
-    label: scaling, performance, and high availability
-    match: ['(?i)scal', '(?i)perform', '(?i)consisten', '(?i)availab']
-  - id: workloads
-    label: HTAP, analytics, and AI workloads
-    match: ['(?i)htap', '(?i)analytic', '(?i)\bai\b', '(?i)vector']
-  - id: operations
-    label: operations, deployment, and ecosystem
-    match: ['(?i)operat', '(?i)kubernetes', '(?i)deploy', '(?i)ecosystem', '(?i)integration', '(?i)cloud[- ]native']
+  - id: capabilities
+    label: capabilities comparison
+    match: ['(?i)capabilit']
+    key_differences: true
+  - id: integrations
+    label: integrations and developer workflow
+    match: ['(?i)integration', '(?i)developer workflow']
+    key_differences: true
+    required_terms: ['(?i)\bmcp\b', '(?i)sql client', '(?i)framework']
+  - id: deployment
+    label: deployment, governance, multi-tenant architecture
+    match: ['(?i)deploy', '(?i)governance', '(?i)multi[- ]tenan']
+    key_differences: true
+  - id: reviews
+    label: support, reviews, market signals
+    match: ['(?i)review', '(?i)market signal']
+    key_differences: true
+    reviews: true
   - id: pricing
-    label: pricing and total cost
-    match: ['(?i)pricing', '(?i)\bcost', '(?i)\btco\b']
+    label: pricing
+    match: ['(?i)pricing', '(?i)\bcost']
+    key_differences: true
     pricing: true
-  - id: decision
-    label: who should choose TiDB vs [Competitor]
-    match: ['(?i)who should', '(?i)choos', '(?i)checklist']
-    required_terms: ['(?mi)^###\s+\**choose tidb if', '(?mi)^###\s+\**choose (?!tidb\b)\S.*\bif']
-  - id: how_tidb_helps
-    label: How TiDB helps teams [solve the problem named in the intro]
-    match: ['(?i)^(?:how|where) tidb (?:helps|solves|fits)']
+  - id: how_tidb_solves
+    label: How TiDB solves [problem named in the intro]
+    match: ['(?i)^how tidb solves\b']
     requires_mechanism: true
     required_terms: ['(?i)\bintro']
   - id: faqs
-    position: -1
-    label: TiDB vs [Competitor] FAQs
+    position: -2
+    label: FAQs
     match: ['(?i)\bfaqs?\b', '(?i)frequently asked']
+  - id: decision
+    position: -1
+    label: decision endcap with evaluation criteria
+    match: ['(?i)decision', '(?i)evaluat', '(?i)choos', '(?i)criteria']
+    required_terms: ['(?i)criteria']
 
 mechanisms:
   - distributed SQL on TiKV
@@ -97,75 +106,57 @@ mechanisms:
   - per-agent isolation
 
 guidance: |
-  For comparison and alternative pages, follow the house format of the live
-  pages under https://www.pingcap.com/compare/ (for example "TiDB vs OceanBase",
-  "TiDB vs PostgreSQL", "Vitess vs TiDB"). The outline must contain exactly these
-  10 H2s in this order. Name both products in headings and prefer question-style
-  H2s that mirror search intent (for example "How do TiDB and [Competitor] differ
-  in architecture?"). Keep each H2's purpose and the fixed wording noted below.
+  For comparison and alternative pages, the outline must contain exactly these
+  10 H2s in this order. Adapt heading wording to the topic and search intent, but
+  keep each H2's purpose and the fixed wording noted below.
 
-  **H2 1: "TiDB vs [Competitor] at a glance".** This is the page's AEO answer H2.
-  Open with a 2 to 3 sentence self-contained answer to the primary keyword's core
-  question, then the table. The table has exactly these columns:
-  Criteria | TiDB | [Competitor name]. 9 to 11 rows, including rows for each of:
-  primary use (or best fit), architecture, SQL / protocol compatibility,
-  consistency and transactions, scaling model, HTAP / analytics, high availability
-  / multi-region, operations (Kubernetes and deployment), pricing model. Fill
-  every competitor cell with the competitor's actual capability and never omit
-  competitor strengths. Under the table, add a "Sources:" line listing complete
-  https:// source URLs for the competitor claims, marked "{{claims.verify_marker}}".
-  Then add an H3 titled "Key differences" with the three or four differences that
-  drive the decision.
+  **H2 1: AEO answer.** The heading directly answers the primary keyword's core
+  question. The first 2 to 3 sentences are a self-contained, extractable answer.
 
-  **H2 2: Architecture.** For example "How do TiDB and [Competitor] differ in
-  architecture?". H3s: TiDB architecture (TiDB server, TiKV, PD, TiFlash),
-  [Competitor] architecture, and what the design means for real workloads.
+  **H2 2: "[Topic] at a glance".** A table with exactly these columns:
+  Category | [Competitor name] | TiDB product | Best fit. 8 to 10 rows. It must
+  include rows for each of these categories: database model, vector support, auth,
+  storage, MCP/AI tooling workflow, setup/provisioning, multi-tenant scale,
+  operational tradeoffs, pricing model. Fill every competitor cell with the
+  competitor's actual capability. If the competitor offers a feature in a row's
+  category (for example a hosted MCP server), describe it: never omit competitor
+  strengths. Under the table, add a "Sources:" line listing a source URL for the
+  competitor claims, marked "{{claims.verify_marker}}".
 
-  **H2 3: Compatibility and migration.** SQL dialect and protocol, drivers and
-  ORMs, what needs testing, and a short migration path (assess, migrate and
-  validate, cut over).
+  **H2 3: Capabilities comparison.**
+  **H2 4: Integrations and developer workflow.** Cover MCP, SQL clients, and
+  frameworks for both products.
+  **H2 5: Deployment, governance, and multi-tenant architecture.**
+  **H2 6: Support, reviews, and market signals.** Point the writer to the exact
+  G2, Capterra, and Clutch pages for each product and instruct them to capture
+  the score, review count, and retrieval date. Never state or invent a rating.
+  {{review_sources}}
+  **H2 7: Pricing.** Competitor numbers only with a source URL and year, each
+  marked "{{claims.verify_marker}}". For TiDB, describe the billing model unless
+  public numbers are verifiable from a pingcap.com source.
+  **H2 8: "How TiDB solves [the problem named in the intro]".** The heading starts
+  with "How TiDB solves". Name the actual mechanism (for example distributed SQL
+  on TiKV/Raft, HTAP with TiFlash, the native VECTOR type) in the first sentence
+  of the guidance and explicitly tie it back to the intro's problem. A generic
+  feature list does not satisfy this.
+  **H2 9: FAQs.**
+  **H2 10: Decision endcap.** Give the reader evaluation criteria for choosing
+  between the two products, then the primary CTA.
 
-  **H2 4: Scaling, performance, and high availability.** Consistency and
-  transactions, scaling model, failover and multi-region, and what to benchmark
-  in a POC. Every performance number needs a year, conditions, and a source.
-
-  **H2 5: HTAP, analytics, and AI workloads.** Real-time analytics on fresh
-  transactional data, plus vector and AI workloads where relevant to the pair.
-
-  **H2 6: Operations, deployment, and ecosystem.** Kubernetes, managed versus
-  self-managed, backups and upgrades, CDC and integrations, governance and support.
-
-  **H2 7: Pricing and total cost.** One H3 per product on cost drivers. Competitor
-  numbers only with a source URL and year, each marked "{{claims.verify_marker}}".
-  For TiDB, describe the billing model unless public numbers are verifiable from a
-  pingcap.com source. A cost-area table (Cost area | TiDB | [Competitor]) is welcome.
-
-  **H2 8: "Who should choose TiDB vs [Competitor]?".** Two H3s titled exactly
-  "Choose TiDB if" and "Choose [Competitor] if", each with concrete, honest
-  selection criteria. Be specific about when the competitor is the better choice.
-
-  **H2 9: "How TiDB helps teams [solve the problem named in the intro]".** The
-  heading starts with "How TiDB helps" (or "How TiDB solves" / "Where TiDB fits").
-  Name the actual mechanism (for example distributed SQL on TiKV/Raft, HTAP with
-  TiFlash, the native VECTOR type) in the first sentence of the guidance and
-  explicitly tie it back to the intro's problem. A generic feature list does not
-  satisfy this. End with an H3 such as "Start your evaluation" carrying the
-  primary CTA.
-
-  **H2 10: "TiDB vs [Competitor] FAQs".** The last H2.
-
-  Do not add a reviews or ratings H2: the live /compare/ pages do not have one.
-  Do not add a "Key differences" H3 anywhere other than H2 1.
+  Every comparison H2 (3 to 7) includes an H3 titled "Key differences". In the
+  brief, H3s are heading lines only; the H2's guidance bullets cover them.
+  Write H2s as questions where the SERP supports it. Introduce TiDB late and
+  keep the comparison fair: describe competitor strengths and say when the
+  competitor is the better choice.
 
 checklist: |
-  23. The outline has the 10 comparison H2s in order: at a glance (with the AEO
-      answer and a Key differences H3), architecture, compatibility and
-      migration, scaling/performance/availability, HTAP/analytics/AI,
-      operations and ecosystem, pricing and total cost, who should choose,
-      How TiDB helps (with the primary CTA), FAQs last.
-  24. The at-a-glance table has columns Criteria | TiDB | [Competitor], 9 to 11
-      rows covering all nine required categories, every competitor cell filled,
-      and a Sources line with complete https:// URLs.
-  25. The decision H2 has "Choose TiDB if" and "Choose [Competitor] if" H3s.
+  23. The outline has the 10 comparison H2s in order: AEO answer, at a glance,
+      capabilities, integrations and developer workflow, deployment/governance/
+      multi-tenant, support/reviews/market signals, pricing, How TiDB solves,
+      FAQs, decision endcap.
+  24. The at-a-glance table has columns Category | [Competitor] | TiDB product |
+      Best fit, 8 to 10 rows covering all nine required categories, every
+      competitor cell filled, and a Sources line.
+  25. H2s 3 to 7 each include a "Key differences" H3.
   26. For alternative pages, the FAQ includes at least one question about a
       competitor capability and one about migration.

@@ -31,7 +31,7 @@ serp:
   depth: 20
   min_relevant_pages: 5
   table_min_rows: 5
-  table_max_rows: 10
+  table_max_rows: 6
   excluded_page_patterns:
     - '(?i)not (topically )?relevant'
     - '(?i)\bexcluded\b'
@@ -58,7 +58,7 @@ eeat:
 faq:
   min_questions: 4
   max_questions: 6
-  max_bullets: 4
+  max_bullets: 2
   answer_label: Answer guidance
   # Share of question tokens that must overlap a PAA question or LLM query.
   source_overlap: 0.5
@@ -152,6 +152,27 @@ internal_links:
   section_ubiquity_fraction: 0.5
   # Repeated technical mechanisms still establish relevant link placement.
   section_technical_tokens: [compatible, compatibility, scale, scaling, scalable, replication, sharding, migration, governance, authentication, vector, analytics, storage]
+
+# The brief is a scannable plan for the writer, not a pre-written article. The
+# approved PingCAP sample briefs run 1,500 to 2,500 words for every content type.
+# Fenced code samples are not counted. A unit over its cap is sent to repair.
+brief_length:
+  max_words: 2500
+  section_max_words:
+    Page Goal: 90
+    Target Audience: 80
+    Technical Notes: 90
+    Writer Guardrails: 140
+    Internal Links: 200
+    LLM Visibility Snapshot: 130
+    Link Landscape & Acquisition Angle: 120
+    Schema Markup Recommendations: 90
+    CTAs: 90
+    Word Count Target: 60
+  outline_preamble_max_words: 300
+  h1_max_words: 190
+  h2_max_words: 140
+  faq_max_words: 220
 
 repair:
   max_rounds: 1
