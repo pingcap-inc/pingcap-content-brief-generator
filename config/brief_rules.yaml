@@ -184,7 +184,11 @@ brief_length:
   h2_min_words: 70
   h2_max_words: 140
   # Stated in the prompt as the typical H2 size.
-  section_target_words: 90
+  section_target_words: 75
+  # The prompt asks for this share of the cap: models overshoot a stated limit by
+  # 3-10%, so aiming lower lands under the real cap. Repair targets the same share.
+  prompt_target_fraction: 0.85
+  repair_target_fraction: 0.8
 
 # Refresh mode (--refresh-url): labels follow the approved refresh briefs.
 refresh:

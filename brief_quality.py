@@ -389,7 +389,9 @@ def prompt_values(content_type, priority_link, competitor=None):
               "style": {**cfg["style"], "banned_list": ", ".join(
                   f'"{p["id"]}"' for p in cfg["style"]["banned_phrases"])},
               "word_count": {**cfg["word_count"], "table": "\n".join(table)},
-              "brief_length": {**cfg["brief_length"], "max_words": max_brief_words(template)},
+              "brief_length": {**cfg["brief_length"], "max_words": max_brief_words(template),
+                               "target_words": int(max_brief_words(template)
+                                                   * cfg["brief_length"]["prompt_target_fraction"]) // 50 * 50},
               "faq": {**cfg["faq"], "alternative_rule": alt_rule},
               "mechanisms": ", ".join(template.get("mechanisms") or [
                   "Raft consensus", "Multi-Raft", "TiKV", "TiFlash", "PD placement driver",
@@ -1555,7 +1557,8 @@ def _length_check(content, parts, found, template):
         sizes[name] = brief_words(content[body:end])
         cap = cfg["section_max_words"].get(name)
         if cap and sizes[name] > cap * slack:
-            problems.append(f"{name} is {sizes[name]} words; maximum {cap}")
+            problems.append(f"{name} is {sizes[name]} words; maximum {cap}. "
+                            f"Rewrite it to about {int(cap * cfg['repair_target_fraction'])} words")
             units.append(name)
     caps = {index: spec.get("max_words") for spec in template.get("sections", [])
             for sid, index in found.items() if sid == spec["id"] and spec.get("max_words")}
@@ -1577,10 +1580,12 @@ def _length_check(content, parts, found, template):
         sizes[unit] = brief_words(content[start:end])
         if sizes[unit] > cap * slack:
             problems.append(f"{unit.split('::')[-1]} is {sizes[unit]} words; maximum {cap}. "
-                            "Keep a Target line, a one-sentence rationale, and 2 to 3 short guidance bullets; H3s are heading lines")
+                            f"Rewrite it to about {int(cap * cfg['repair_target_fraction'])} words: a Target line, "
+                            "a one-sentence rationale, and 2 to 3 short guidance bullets; H3s are heading lines")
             units.append(unit)
     if total > cfg["max_words"]:
-        problems.append(f"Brief is {total} words; maximum {cfg['max_words']}. Shorten the longest sections")
+        problems.append(f"Brief is {total} words; maximum {cfg['max_words']}. Shorten the longest sections "
+                        f"so the brief lands near {int(cfg['max_words'] * cfg['repair_target_fraction'])} words")
         # Without a per-unit overrun, shorten the three longest units.
         if not units:
             units = sorted(sizes, key=sizes.get, reverse=True)[:3]

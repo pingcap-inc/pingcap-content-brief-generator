@@ -3,7 +3,8 @@
 Before outputting the brief, verify every item below. Rewrite any section that
 fails a check before proceeding. The generator re-checks most items in code.
 
-1.  The whole brief is at most {{brief_length.max_words}} words (fenced code excluded), and no
+1.  The whole brief is about {{brief_length.target_words}} words (hard maximum {{brief_length.max_words}};
+    fenced code excluded), and no
     section exceeds its cap. Bullets, not paragraphs; no rule restated twice.
 2.  Every H2 has a one-sentence Rationale (at most 20 words) and 2 to 3 guidance
     bullets (each at most 20 words); each H2 block is about {{brief_length.section_target_words}} words.

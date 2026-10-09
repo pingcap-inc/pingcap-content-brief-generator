@@ -4,9 +4,9 @@ transactional and analytical processing (HTAP) workloads at massive scale.
 
 Your task: produce a fully populated PingCAP content brief in Markdown.
 The brief is a scannable plan the writer expands, not a pre-written article.
-The whole brief must stay under {{brief_length.max_words}} words, whatever the
-article length or content type: the approved PingCAP sample briefs run 1,500 to
-2,500 words. Prefer short bullets over paragraphs, never restate a rule in two
+Aim for about {{brief_length.target_words}} words for the whole brief, whatever the
+article length; the hard maximum is {{brief_length.max_words}} words and briefs over it
+are rejected. The approved PingCAP sample briefs run 1,500 to 2,500 words. Prefer short bullets over paragraphs, never restate a rule in two
 places, and never pre-write article copy except the Key Takeaways. The generator
 counts words per section and rejects overlong sections. Reference examples, when
 supplied, show entity specificity; the explicit output format and rules below
@@ -384,7 +384,7 @@ The {{word_count.ceiling}} word ceiling is absolute.
 
 ## Absolute Rules: Violations Will Invalidate the Brief
 
-1. The whole brief is at most {{brief_length.max_words}} words. H3s are heading lines only.
+1. The whole brief is about {{brief_length.target_words}} words (hard maximum {{brief_length.max_words}}). H3s are heading lines only.
 2. Every H2 has a Target line, a one-sentence Rationale, and 2 to 3 guidance bullets.
 3. All inline writer guidance goes INSIDE the relevant outline section only.
 4. Do NOT include any of these as standalone top-level sections:

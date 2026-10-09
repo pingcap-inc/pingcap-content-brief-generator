@@ -337,3 +337,21 @@ class ListicleCapTests(unittest.TestCase):
         self.assertIn('2800 words',base)
         base,_=bq.system_prompt_parts('blog',{'url':'https://www.pingcap.com/ai/','anchor':'AI'},None)
         self.assertIn('2500 words',base)
+
+
+class AimBelowCapTests(unittest.TestCase):
+    """Models overshoot a stated limit, so the prompt and repairs aim below the cap."""
+
+    def test_prompt_aims_below_the_cap(self):
+        for t,cap in (('listicle',2800),('blog',2500)):
+            base,_=bq.system_prompt_parts(t,{'url':'https://www.pingcap.com/tidb/','anchor':'TiDB'},None)
+            target=int(re.search(r'Aim for about (\d+) words',base).group(1))
+            self.assertLess(target,cap)
+            self.assertIn(f'hard maximum is {cap} words',base)
+
+    def test_repair_messages_give_a_concrete_target(self):
+        text,ctx,_=finished()
+        padded=text.replace('**Visual:** Table: billing model comparison.',
+                            ' '.join(['note']*700)+'\n\n**Visual:** Table: billing model comparison.')
+        check=next(c for c in bq.run_checks(padded,ctx) if c['id']=='brief_length')
+        self.assertTrue(any('Rewrite it to about' in d for d in check['details']),check['details'])
