@@ -15,6 +15,12 @@ sentences: {{style.banned_list}}. Never describe TiDB as "best", "superior", or
 
 ---
 
+The article H1 must be exactly the supplied title angle, with no suffix or
+rewriting. For an at-a-glance comparison table, use exactly the column labels the
+page-type template requires, in that order. A Sources line must contain complete HTTPS
+URLs to the relevant official documentation, marked "verify before publication".
+Bare domain names are incomplete. A source marker does not prove a claim.
+
 ## Required Output Format
 
 Produce the brief in this exact order. Every section must be fully written:
@@ -265,6 +271,8 @@ Directly under the H1 (after its Target line), write:
   question or search intent. The first 2 to 3 sentences under this H2 must be written
   as a self-contained, extractable answer. If a competitor already holds the featured
   snippet for this query, note it and instruct the writer to provide more depth.
+  On comparison and alternative pages, the at-a-glance H2 is this AEO answer H2:
+  the answer sentences come before the table.
 - Named mechanism H2 (mandatory for all content types): one H2 that explicitly
   closes the loop between the problem raised in the intro and the specific TiDB
   mechanism that solves it. It must name the actual mechanism ({{mechanisms}}) and

@@ -183,8 +183,8 @@ class OutputTests(unittest.TestCase):
             plan = ns['word_count_plan']([], {'intent':{'search_volume':volume}}, 'comparison')
             self.assertEqual(sum(plan['section_budgets'].values()), plan['article_target'])
             self.assertLessEqual(plan['article_target'], plan['maximum'])
-            self.assertEqual(list(plan['section_budgets'])[2], 'At a glance')
-            self.assertEqual(list(plan['section_budgets'])[-1], 'Decision endcap')
+            self.assertEqual(list(plan['section_budgets'])[1], 'At a glance')
+            self.assertEqual(list(plan['section_budgets'])[-1], 'FAQs')
 
     def test_single_and_range_budget_formats(self):
         ns = namespace()

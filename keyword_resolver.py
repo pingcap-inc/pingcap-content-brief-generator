@@ -419,7 +419,7 @@ def comparison_matches_title(keyword, title, entities):
     """An explicit product pair cannot be replaced by a different product pair."""
     if not entities or not re.search(r'(?i)\b(?:vs\.?|versus)\b', title):
         return True
-    pair = re.split(r'\s+(?:vs\.?|versus)\s+', clean_keyword(keyword))
+    pair = re.split(r'\s+(?:vs\.?|versus|v\s*[/ .]\s*s\.?)\s+', clean_keyword(keyword))
     if len(pair) != 2:
         return True
     expected = {clean_keyword(entities[k]) for k in ('product','competitor') if entities.get(k)}
@@ -451,6 +451,13 @@ class Resolver:
         entities = None
         if override is not None:
             candidates = [clean_keyword(override)]
+            if re.search(r'(?i)\b(?:vs\.?|versus)\b',title) and re.search(
+                    r'\s+(?:vs\.?|versus|v\s*[/ .]\s*s\.?)\s+',candidates[0]):
+                entities = self.api.extract(title)
+                if not all(entities.get(k) for k in ('product','competitor')):
+                    raise ResolutionError('Cannot identify both comparison products from the title. Clarify the title before using a comparison override.')
+                if not comparison_matches_title(candidates[0],title,entities):
+                    raise ResolutionError(f'Keyword override "{candidates[0]}" compares different products from "{title}". Use a keyword for the same pair, or change the article title.')
         else:
             entities = self.api.extract(title)
             candidates = generate_candidates(entities,content_type,cfg)
@@ -507,6 +514,8 @@ class Resolver:
                 status = 'needs writer confirmation'
             elif collision:
                 status = 'discarded: unrelated brand'
+            elif ratio == 0 and override is None:
+                status = 'blocked: no matching search intent'
             else:
                 status = 'eligible' if relevant>=cfg['min_relevant_pages'] else 'blocked: insufficient relevant pages'
             rows.append({'keyword':keyword,**metrics[keyword],'scores':scores,'serp_snapshot':snapshot,

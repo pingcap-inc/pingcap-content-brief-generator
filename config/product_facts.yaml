@@ -1,6 +1,16 @@
 # Product facts the brief is checked against. Each check type is implemented
 # in brief_quality.py: forbidden_pattern, number_in_context, sql_vector_nullsafe.
 facts:
+  - id: mariadb_vector_support
+    statement: >-
+      MariaDB has a native VECTOR type from 11.7.1. Do not claim MariaDB has no
+      native vector support without specifying an older version. Compare the
+      exact MariaDB version and TiDB deployment. Source:
+      https://mariadb.com/docs/server/reference/sql-structure/vectors/vector
+    checks:
+      - type: forbidden_pattern
+        pattern: '(?i)\bmariadb\b[^.\n|]{0,70}\b(?:has no|lacks|does not support)\b[^.\n|]{0,40}\b(?:native vector|vector type)\b'
+        message: MariaDB has native VECTOR support from 11.7.1; specify the version being compared.
   - id: tidb_cloud_zero_api
     statement: >-
       The TiDB Cloud Zero API is POST https://zero.tidbapi.com/v1beta1/instances.

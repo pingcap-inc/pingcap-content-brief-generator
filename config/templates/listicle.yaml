@@ -1,4 +1,6 @@
-# Listicle pages. Guidance moved from the former inline prompt.
+# Listicle ("best X") pages. The structure mirrors the live pages under
+# https://www.pingcap.com/compare/ (for example htap-database,
+# mysql-compatible-database, best-databases-for-real-time-analytics).
 content_types:
 - listicle
 max_h2: 12
@@ -40,6 +42,7 @@ sections:
 - id: tidb_spotlight
   label: TiDB spotlight
   match:
+  - (?i)^when is tidb
   - (?i)^how tidb
 - id: closing_cta
   label: Closing CTA section
@@ -110,7 +113,9 @@ guidance: |
   **H2 7: Vendor reviews**
   Title: "Best [topic] reviewed"
   Target: use the corresponding supplied section budget.
-  Content: Use the same 7-part vendor template for every entry:
+  Content: Each vendor gets its own H3 named with the product name only (for
+  example "TiDB", "ClickHouse"), as on the live /compare/ listicles. Use the same
+  7-part vendor template for every entry:
     - **Best for**: one-sentence positioning statement
     - **Why it's on the list**: 2–3 sentences on why this product fits the topic
     - **Key features**: 3–5 bullet points of relevant capabilities
@@ -127,10 +132,14 @@ guidance: |
   only if live pages are verified by a human before publication.
 
   **H2 8: TiDB spotlight**
-  Title: "How TiDB’s [named mechanism] solves [the introductory problem]"
+  Title: "When is TiDB the best [category]?"
   Target: use the corresponding supplied section budget.
-  Content: Map 3 specific use cases to TiDB with concrete fit reasons. Use a customer example or case study only when relevant verified evidence
-  is supplied. Otherwise omit that example and explain the technical fit. Each use case gets an H3.
+  Content: Map 3 specific use cases to TiDB with concrete fit reasons, each as an
+  H3 titled "Best for [use case]" (for example "Best for scaling MySQL without
+  manual sharding"). Name the actual TiDB mechanism behind each fit and tie it back
+  to the introductory problem. Use a customer example or case study only when
+  relevant verified evidence is supplied. Otherwise omit that example and explain
+  the technical fit.
 
   **H2 9: 4-step decision framework**
   Title: "How do you choose the right [category]?"

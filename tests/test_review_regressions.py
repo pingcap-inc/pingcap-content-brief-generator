@@ -61,7 +61,7 @@ class ReviewTests(unittest.TestCase):
         def relevance(title,keyword,results):
             return [{'index':i,'relevance':0.99 if i<4 else 0.59,'page_type':'comparison','different_brand':False}
                     if keyword=='supabase alternative' else
-                    {'index':i,'relevance':0.61 if i<5 else 0,'page_type':'forum','different_brand':False}
+                    {'index':i,'relevance':0.61 if i<5 else 0,'page_type':'comparison' if i<2 else 'forum','different_brand':False}
                     for i in range(10)]
         api.relevance = relevance
         result = Resolver(api,load_config()).resolve(TITLE,'comparison')
@@ -138,7 +138,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_wrong_competitor_cannot_validate_itself(self):
         text,ctx,_=finished(ctx=context(competitor='Supabase'))
-        text=text.replace('| Category | Supabase |','| Category | MariaDB |')
+        text=text.replace('| Criteria | TiDB | Supabase |','| Criteria | TiDB | MariaDB |')
         self.assertEqual(bq.competitor_name(text,ctx),'Supabase')
         self.assertIn('section_at_a_glance',failing(text,ctx))
 
