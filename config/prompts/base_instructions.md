@@ -63,7 +63,7 @@ rejects any value outside these limits.
 
 ### Page Goal
 
-Write 2 to 3 sentences describing what the reader should believe after
+Write 2 sentences describing what the reader should believe after
 reading, what action they should take, and how this content strengthens
 TiDB/PingCAP's entity association in LLMs and search engines for the target
 keyword cluster. Put role, company type, evaluation stage, and decision driver
@@ -73,7 +73,7 @@ only in the separate Target Audience section.
 
 ### Target Audience
 
-  Write a focused 2 to 3 sentence paragraph that names:
+  Write a focused 2-sentence paragraph that names:
   - The specific job titles or roles (e.g. "Senior engineers, platform architects, and database leads")
   - The company type and scale (e.g. "at high-growth SaaS companies, fintech platforms, or AI-native startups")
   - The evaluation stage they are at (e.g. "who are actively evaluating distributed SQL solutions after hitting MySQL scaling limits")
@@ -109,12 +109,13 @@ this content type, chosen from:
 ### Writer Guardrails
 
 These are mandatory editorial standards the writer must follow before publication:
-- **Benchmark data**: Must include year, test conditions, and verifiable source. Drop any benchmark that cannot be attributed; do not use unverifiable speed claims.
-- **Pricing claims**: Competitor numbers only with a source URL and year, marked "{{claims.verify_marker}}". For TiDB, describe the billing model unless public numbers are verifiable.
-- **Review ratings**: Never invent ratings. The writer captures the score, review count, and retrieval date from the exact G2, Capterra, or Clutch page.
-- **Internal links**: Use only verified pingcap.com URLs. Do not guess or invent paths.
-- **Competitor claims**: Any limitation attributed to a competitor must be factual and attributable, with no editorialising. Describe competitor strengths too.
-- **Product positioning**: Avoid generic product praise. Ground all TiDB positioning in specific capabilities, architecture facts, or customer proof points.
+Write these six items as given (one short line each):
+- **Benchmark data**: Include year, test conditions, and source, or drop the benchmark.
+- **Pricing claims**: Competitor numbers need a source URL and year, marked "{{claims.verify_marker}}"; describe TiDB's billing model.
+- **Review ratings**: Never invent ratings; capture score, review count, and retrieval date from the exact page.
+- **Internal links**: Use only verified pingcap.com URLs.
+- **Competitor claims**: Keep limitations factual and attributable; describe competitor strengths too.
+- **Product positioning**: Ground TiDB claims in specific capabilities, architecture, or customer proof.
 
 ---
 
@@ -158,7 +159,7 @@ or a guarantee of AI inclusion, featured snippets, or schema rich-result eligibi
 
 Using the available evidence, produce:
 
-Every bullet is one sentence.
+Every bullet is one sentence of at most 20 words.
 
 - **AI Search Presence**: How many AI-generated responses mention this topic area,
   and which platforms surface results (Google AI Overviews, ChatGPT, etc.)
@@ -186,7 +187,7 @@ Using the backlinks data provided, produce:
 - **Competitor Backlink Comparison Table**: A table showing each competitor URL
   analyzed, their referring domains count, total backlinks, domain rank, and
   dofollow/nofollow ratio.
-- **Anchor Text and Acquisition**: At most 2 one-sentence bullets: the dominant
+- **Anchor Text and Acquisition**: At most 2 bullets of at most 20 words: the dominant
   anchor-text pattern and the most specific link acquisition strategy for this page.
 - **Difficulty Flag**: If any competitor has 500+ referring domains, flag this
   as a high-competition topic and note that link building will require sustained

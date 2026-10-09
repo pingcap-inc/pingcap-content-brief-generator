@@ -297,3 +297,28 @@ class TierFitRunTests(unittest.TestCase):
         ctx=dict(ctx,plan={'primary_keyword_msv':5000,'tier':'5,000+','minimum':3500,'maximum':4000})
         out,_=bq.apply_deterministic(text,ctx)
         self.assertRegex(out,r'\*\*Target:\*\* ~\d+–\d+ words')
+
+
+class MultiTenantListicleRunTests(unittest.TestCase):
+    """From "Best Database for Multi-Tenant AI Apps" (brief_failed_oejb314f)."""
+
+    def test_roster_url_followed_by_semicolon_is_accepted(self):
+        text,ctx,_=finished()
+        url=bq.roster()[0]['url']
+        bad=text.replace('Cite Manus as an agent platform customer: https://www.pingcap.com/case-study/manus-agentic-ai-database-tidb/',
+                         f'Cite a customer: {url}; verify numbers.')
+        self.assertNotEqual(bad,text)
+        self.assertFalse(any('not in the customer roster' in d for c in bq.run_checks(bad,ctx) for d in c['details']))
+
+    def test_spotlight_heading_variants_match(self):
+        spec=next(s for s in bq.template_for('listicle')['sections'] if s['id']=='tidb_spotlight')
+        for title in ['When does TiDB fit a multi-tenant AI app?','When Is TiDB the Best HTAP Database?','How TiDB handles tenants']:
+            self.assertTrue(any(re.search(p,title) for p in spec['match']),title)
+        self.assertFalse(any(re.search(p,'How do you choose the right database?') for p in spec['match']))
+
+    def test_year_is_removed_from_meta_title(self):
+        text,ctx,_=finished()
+        title='Supabase Alternative for AI Agent Backends - PingCAP'
+        out,notes=bq.apply_deterministic(text.replace(title,'Supabase Alternative for AI Agent Backends 2025 - PingCAP'),ctx)
+        self.assertEqual(bq.meta_cells(out)['Meta Title'],title)
+        self.assertIn('Removed the year from the Meta Title',notes)

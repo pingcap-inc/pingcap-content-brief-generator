@@ -42,8 +42,7 @@ sections:
 - id: tidb_spotlight
   label: TiDB spotlight
   match:
-  - (?i)^when is tidb
-  - (?i)^how tidb
+  - (?i)^(?:when|where|why|how)\b[^?]{0,20}\btidb\b
 - id: closing_cta
   label: Closing CTA section
   match:

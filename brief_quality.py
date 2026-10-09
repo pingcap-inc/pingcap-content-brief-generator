@@ -785,6 +785,14 @@ def apply_deterministic(content, ctx):
             content = content[:start]+corrected+content[end:]
             notes.append('Restored the supplied article H1')
 
+    # Meta Title: no year (models add one to pad the length, sometimes the wrong year).
+    title = meta_cells(content).get("Meta Title", "")
+    clean = re.sub(r"\s*\(?\b(?:in\s+|for\s+)?20\d\d\b\)?:?", "", title)
+    clean = re.sub(r"\s{2,}", " ", clean).replace(" -  ", " - ").strip()
+    if clean != title:
+        content = _set_meta_row(content, "Meta Title", clean)
+        notes.append("Removed the year from the Meta Title")
+
     # Meta: values the model must not choose.
     entities = entity_list(content)
     unique = dedupe(entities, key=lambda e: e[0].casefold())
@@ -845,7 +853,7 @@ def apply_deterministic(content, ctx):
     for line in content.splitlines(keepends=True):
         is_cta = re.search(r"(?i)\bcta\b", line) and cfg["cta"]["primary_label"].casefold() not in line.casefold()
         urls = re.findall(r"https?://[^\s)\]>|]+", line)
-        bad_url = [u for u in urls if u.rstrip(".,") != ctx["priority_link"]["url"] and not verifier(u.rstrip(".,"))]
+        bad_url = [u for u in urls if u.rstrip(".,;:)") != ctx["priority_link"]["url"] and not verifier(u.rstrip(".,;:)"))]
         if is_cta and (bad_url or any(p.search(line) for p in placeholders)):
             notes.append("Dropped unverifiable CTA: " + line.strip()[:120])
             continue
@@ -1343,7 +1351,7 @@ def _case_study_check(content, ctx):
             problems.append(f"Anonymized customer example: {mt.group(0)!r}")
             units.append(unit_at(content, mt.start()))
     for mt in re.finditer(r"https?://(?:www\.)?pingcap\.com/case-stud(?:y|ies)/[^\s)\]|>]+", content):
-        if mt.group(0).rstrip(".,") not in allowed and not mt.group(0).rstrip("/").endswith("/case-studies"):
+        if mt.group(0).rstrip(".,;:)") not in allowed and not mt.group(0).rstrip("/").endswith("/case-studies"):
             problems.append(f"Case-study URL not in the customer roster: {mt.group(0)}")
             units.append(unit_at(content, mt.start()))
     for offset, line, *_ in _lines(content):

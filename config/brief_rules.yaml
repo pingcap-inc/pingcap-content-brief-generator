@@ -4,7 +4,8 @@ version: 1
 
 meta:
   title_suffix: " - PingCAP"
-  title_min_chars: 50
+  # The approved briefs use titles from 46 characters.
+  title_min_chars: 45
   title_max_chars: 60
   description_max_chars: 140
   slug_prefixes:
@@ -165,13 +166,13 @@ brief_length:
   # When the brief is within max_words, a section fails only above cap x this factor.
   within_total_slack: 1.5
   section_max_words:
-    Page Goal: 90
-    Target Audience: 80
-    Technical Notes: 90
-    Writer Guardrails: 140
+    Page Goal: 70
+    Target Audience: 70
+    Technical Notes: 70
+    Writer Guardrails: 110
     Internal Links: 200
-    LLM Visibility Snapshot: 130
-    Link Landscape & Acquisition Angle: 120
+    LLM Visibility Snapshot: 110
+    Link Landscape & Acquisition Angle: 90
     Schema Markup Recommendations: 90
     CTAs: 90
     Word Count Target: 60
