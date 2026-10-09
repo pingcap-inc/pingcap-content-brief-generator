@@ -231,3 +231,17 @@ class SecondPressurePointsRunTests(unittest.TestCase):
         last='- Compare billing models rather than list prices.\n'
         self.assertIn(last,self.text)
         self.assertNotIn('faqs',failing(self.text.replace(last,last+'\n---\n',1),self.ctx))
+
+
+class ThirdPressurePointsRunTests(unittest.TestCase):
+    """From the third "Seven Pressure Points" run (brief_failed_uf6e0vef)."""
+
+    def test_blogs_allow_twelve_h2s(self):
+        self.assertEqual(bq.template_for('blog')['max_h2'],12)
+        self.assertEqual(bq.template_for('product')['max_h2'],10)
+
+    def test_outline_rewrite_also_replaces_links(self):
+        plan=bq.repair_plan([{'id':'template_sections','passed':False,'details':['12 H2s; maximum 10'],
+                              'units':['Outline / Headings']}])
+        self.assertIn('Internal Links',plan)
+        self.assertIn('Outline / Headings',plan)

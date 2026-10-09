@@ -355,8 +355,11 @@ class CheckTests(unittest.TestCase):
         self.assertFails("faqs", "- Use TiDB Data Migration tooling where it fits.",
                          "- Use TiDB Data Migration tooling where it fits.\n- Step four.\n- Step five.")
         self.assertFails("faqs", "**Answer guidance:**\n- Point to the dated", "**Answer guidance:**\nStart with context.\n- Point to the dated")
-        self.assertFails("faqs", "### How much does Supabase cost for AI agent workloads?",
-                         "### Why do penguins migrate south in winter?")
+        one = self.good.replace("### How much does Supabase cost for AI agent workloads?",
+                                "### Why do penguins migrate south in winter?")
+        self.assertNotIn("faqs", failing(one, self.ctx), "one unsourced question of four is allowed")
+        self.assertIn("faqs", failing(one.replace("### Which database handles vector search and SQL for AI agents?",
+                                                  "### What do penguins eat in winter?"), self.ctx))
         self.assertFails("faqs", "### How do I migrate from Supabase to TiDB Cloud?", "### How do I move off it to TiDB Cloud?")
         self.assertFails("faqs", "### Does Supabase have a hosted MCP server for agents?", "### Does it have a hosted MCP server for agents?")
         self.assertFails("faqs", "**Rationale**: FAQ queries", "Answer in 3 to 5 sentences.\n\n**Rationale**: FAQ queries")

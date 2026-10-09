@@ -62,6 +62,8 @@ faq:
   answer_label: Answer guidance
   # Share of question tokens that must overlap a PAA question or LLM query.
   source_overlap: 0.5
+  # Share of FAQ questions that must overlap a PAA question or LLM query.
+  min_sourced_fraction: 0.6
   forbidden_guidance:
     - '(?i)\b\d\s*(?:-|to|–)\s*\d\s+sentences?\b'
   alternative_questions:

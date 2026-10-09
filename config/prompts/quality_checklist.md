@@ -42,7 +42,7 @@ fails a check before proceeding. The generator re-checks most items in code.
     "{{claims.verify_marker}}". No invented review ratings.
 18. SQL labeled TiDB or MySQL never uses <=> for vector distance.
 19. Heading hierarchy is strictly H1 -> H2 -> H3 with no skips, and the
-    outline has at most 10 H2s (12 for listicles).
+    outline has at most 10 H2s (12 for listicles and blogs).
 20. Every H2 includes a "Target: ~X–Y words" line, no Visual line, and top-level
     targets sum to within the Word Count Plan tier.
 21. The brief contains a standalone Target Audience section between Page Goal and

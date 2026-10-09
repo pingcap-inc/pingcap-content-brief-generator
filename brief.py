@@ -1041,7 +1041,8 @@ def validate_brief(content, content_type, candidates, plan, ctx=None, existing_p
     # Fenced SQL/Markdown samples are not outline headings.
     outline = "".join("\n" if fenced else line for line, fenced in markdown_lines(outline))
     h2s = list(re.finditer(r"(?m)^##\s+(.+)$", outline))
-    if not 1 <= len(h2s) <= (12 if content_type == "listicle" else 10):
+    from brief_quality import template_for
+    if not 1 <= len(h2s) <= template_for(content_type).get("max_h2", 10):
         errors.append("Invalid number of article H2s")
     # An AEO answer (comparison) or quick answer (listicle) precedes the table.
     glance = {"comparison": 1, "alternative": 1, "listicle": 1}.get(content_type)

@@ -394,7 +394,7 @@ The {{word_count.ceiling}} word ceiling is absolute.
 6. No unverified performance claims or superlatives without cited evidence.
 7. Heading hierarchy must be strictly H1 -> H2 -> H3 with no skips. No visual notes,
    no Visual Recommendations summary.
-8. Maximum 10 H2 sections, except listicles which allow up to 12.
+8. Maximum 10 H2 sections, except listicles and blogs, which allow up to 12.
 9. The page-type template's required H2s are all present, in its order.
 10. The Writer Guardrails section must appear in every brief with all six items.
 11. Word Count Target must state the MSV value, its tier, the resulting range, and a

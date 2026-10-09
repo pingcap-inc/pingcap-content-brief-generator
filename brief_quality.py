@@ -1282,15 +1282,13 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
     if not cfg["min_questions"] <= len(blocks) <= cfg["max_questions"]:
         problems.append(f"FAQ has {len(blocks)} questions; allowed {cfg['min_questions']}-{cfg['max_questions']}")
     sources = [tokens(q) for q in (ctx.get("paa") or []) + split_cell(meta.get("Relevant LLM Queries", ""))]
-    questions = []
+    questions, unsourced = [], []
     for blk in blocks:
         question = blk.splitlines()[0].strip().strip("*")
         questions.append(question)
         q = tokens(question)
         if q and not any(len(q & src) >= cfg["source_overlap"] * len(q) for src in sources):
-            allowed = "; ".join((ctx.get("paa") or []) + split_cell(meta.get("Relevant LLM Queries", "")))
-            problems.append(f"FAQ question not sourced from PAA or Relevant LLM Queries: {question!r}. "
-                            f"Rephrase one of these instead: {allowed}")
+            unsourced.append(question)
         label = re.search(rf"(?mi)^\**{re.escape(cfg['answer_label'])}:?\**:?\s*$", blk)
         if not label:
             problems.append(f"FAQ {question!r} has no '{cfg['answer_label']}:' bullets")
@@ -1307,6 +1305,13 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
             problems.append(f"FAQ {question!r} answer guidance must be bullet points only")
         if not 1 <= len(bullets) <= cfg["max_bullets"]:
             problems.append(f"FAQ {question!r} has {len(bullets)} answer bullets; allowed 1-{cfg['max_bullets']}")
+    # Most questions come from PAA or the LLM queries; the approved briefs add a few of their own.
+    if blocks and len(blocks) - len(unsourced) < cfg["min_sourced_fraction"] * len(blocks):
+        allowed = "; ".join((ctx.get("paa") or []) + split_cell(meta.get("Relevant LLM Queries", "")))
+        problems.append(f"Too few FAQ questions come from PAA or Relevant LLM Queries "
+                        f"({len(blocks) - len(unsourced)} of {len(blocks)}; at least "
+                        f"{cfg['min_sourced_fraction']:.0%}). Unsourced: {'; '.join(unsourced)}. "
+                        f"Rephrase from these instead: {allowed}")
     problems += [f"FAQ guidance uses a prose-length instruction ({p})" for p in cfg["forbidden_guidance"]
                  if re.search(p, text)]
     if ctx["content_type"] == "alternative" or "alternative" in ctx["resolution"]["primary_keyword"].casefold():
@@ -1441,12 +1446,15 @@ def brief_words(text):
 def _length_check(content, parts, found, template):
     cfg = rules()["brief_length"]
     problems, units, sizes = [], [], {}
+    total = brief_words(content)
+    # Within the total, small overruns do not matter; over it, every cap is strict.
+    slack = 1.0 if total > cfg["max_words"] else 1.1
     for name, (head, body, end) in sections(content).items():
         if name == OUTLINE:
             continue
         sizes[name] = brief_words(content[body:end])
         cap = cfg["section_max_words"].get(name)
-        if cap and sizes[name] > cap:
+        if cap and sizes[name] > cap * slack:
             problems.append(f"{name} is {sizes[name]} words; maximum {cap}")
             units.append(name)
     caps = {index: spec.get("max_words") for spec in template.get("sections", [])
@@ -1461,16 +1469,16 @@ def _length_check(content, parts, found, template):
     fixed += sum(brief_words(content[s:e]) for i, (_, s, e) in enumerate(parts["h2s"]) if i in caps)
     body = [i for i in range(len(parts["h2s"])) if i not in caps]
     share = (cfg["max_words"] - fixed) // len(body) if body else cfg["h2_max_words"]
-    h2_cap = max(cfg["h2_min_words"], min(cfg["h2_max_words"], share))
+    h2_cap = (max(cfg["h2_min_words"], min(cfg["h2_max_words"], share)) if total > cfg["max_words"]
+              else cfg["h2_max_words"])
     for i, (title, start, end) in enumerate(parts["h2s"]):
         outline.append((_section_unit(i), (start, end), caps.get(i) or h2_cap))
     for unit, (start, end), cap in outline:
         sizes[unit] = brief_words(content[start:end])
-        if sizes[unit] > cap:
+        if sizes[unit] > cap * slack:
             problems.append(f"{unit.split('::')[-1]} is {sizes[unit]} words; maximum {cap}. "
                             "Keep a Target line, a one-sentence rationale, and 2 to 3 short guidance bullets; H3s are heading lines")
             units.append(unit)
-    total = brief_words(content)
     if total > cfg["max_words"]:
         problems.append(f"Brief is {total} words; maximum {cfg['max_words']}. Shorten the longest sections")
         # Without a per-unit overrun, shorten the three longest units.
@@ -1496,6 +1504,10 @@ def repair_plan(checks):
     if OUTLINE in plan:
         for unit in [u for u in plan if u.startswith(OUTLINE + "::")]:
             plan[OUTLINE].extend(plan.pop(unit))
+        # A rewritten outline can add, drop, or reorder H2s; re-place the links with it.
+        plan.setdefault("Internal Links", []).append(
+            "The outline is being rewritten: re-check every row's h2_N against the new outline "
+            "so each link sits in an H2 whose topic it supports")
     return {unit: dedupe(v) for unit, v in plan.items()}
 
 
