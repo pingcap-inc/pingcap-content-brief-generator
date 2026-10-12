@@ -148,6 +148,19 @@ def dataforseo_post(endpoint, payload):
     return data
 
 
+def get_worldwide_volume(keyword):
+    """Worldwide monthly search volume for one keyword (the brief's MSV is US-only)."""
+    try:
+        data = dataforseo_post("keywords_data/google_ads/search_volume/live",
+                               [{"keywords": [keyword], "language_code": "en"}])
+        record_api_cost("keywords_data/google_ads/search_volume/live (worldwide)", data)
+        rows = data["tasks"][0].get("result") or []
+        return rows[0].get("search_volume") if rows else None
+    except Exception as exc:
+        print(f"    Warning: worldwide volume unavailable: {exc}")
+        return None
+
+
 def get_keyword_data(topic):
     """
     Fetch search volume and keyword difficulty for the topic
@@ -1007,10 +1020,10 @@ def validate_serp_blocks(outline):
     table_ok = False
     for i in range(len(rows) - 2):
         header, separator, data = rows[i:i + 3]
-        if ([cell.casefold() for cell in header] == ["#", "page", "key angle"]
-                and len(separator) == 3
+        if ([cell.casefold() for cell in header] == ["#", "page", "key angle", "how to outrank"]
+                and len(separator) == 4
                 and all(re.fullmatch(r":?-{3,}:?", cell) for cell in separator)
-                and len(data) == 3 and all(data)
+                and len(data) == 4 and all(data)
                 and not all(re.fullmatch(r"[-:]+", cell) for cell in data)):
             table_ok = True
             break
@@ -2395,6 +2408,7 @@ def main():
     except ResolutionError:
         entities = {}
     quality_context = {"url_verifier": url_verifier, "case_study_text": case_study_text,
+                       "primary_msv_worldwide": get_worldwide_volume(search_keyword),
                        "competitor": entities.get("competitor") or None,
                        "serp_source_keyword": serp_features["source_keyword"],
                        "existing_page": existing_page}

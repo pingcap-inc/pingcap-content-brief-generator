@@ -86,7 +86,7 @@ class CompareHouseFormatTests(unittest.TestCase):
         ids=[s['id'] for s in template['sections']]
         self.assertEqual(ids[:2],['aeo_answer','at_a_glance'])
         self.assertIn('reviews',ids)
-        self.assertEqual(ids[-2:],['faqs','decision'])
+        self.assertEqual(ids[-2:],['decision','faqs'])
 
     def test_listicle_spotlight_uses_live_heading(self):
         template=bq.template_for('listicle')
@@ -451,3 +451,27 @@ class RunFolderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             path=bq.run_folder('CI/CD: Why? "Databases" break','blog',root)
             self.assertEqual(os.path.basename(path),'CI CD Why Databases break [blog] v1')
+
+
+class ReviewerCommentTests(unittest.TestCase):
+    """Brian Foster's comments on the TiDB vs. MariaDB brief (Oct 2026)."""
+
+    def test_msv_source_and_worldwide_volume_are_stated(self):
+        text,ctx,_=finished(ctx=context(primary_msv_worldwide=70))
+        self.assertEqual(bq.meta_cells(text)['MSV Source'],
+                         'DataForSEO Google Ads, United States, monthly average. Primary keyword worldwide: 70')
+
+    def test_competitor_obsolete_question_is_rejected(self):
+        text,ctx,_=finished()
+        bad=text.replace('### Does Supabase have a hosted MCP server for agents?','### Is Supabase obsolete?')
+        self.assertTrue(any('not neutral' in d for c in bq.run_checks(bad,ctx) for d in c['details']))
+
+    def test_serp_table_needs_how_to_outrank(self):
+        base,_=bq.system_prompt_parts('comparison',{'url':'https://www.pingcap.com/tidb/','anchor':'TiDB'},'MariaDB')
+        self.assertIn('| # | Page | Key Angle | How to outrank |',base)
+
+    def test_decision_comes_before_faqs(self):
+        text,_,_=finished()
+        titles=[t for t,*_ in bq.outline_parts(text)['h2s']]
+        self.assertIn('FAQ',titles[-1])
+        self.assertTrue(titles[-2].startswith('How should you choose'))

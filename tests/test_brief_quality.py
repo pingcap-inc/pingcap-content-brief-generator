@@ -283,10 +283,10 @@ class CheckTests(unittest.TestCase):
         self.assertFails("key_takeaways", bullet, "- Compare pricing.")
         self.assertFails("key_takeaways", "- Agent backends that need many isolated tenants benefit from TiDB horizontal scale on TiKV.\n" + bullet + "\n", "")
         self.assertFails("key_takeaways", "**Key Takeaways**", "**Summary**")
-        self.assertFails("eeat", "Add an expert review note", "Add a note")
-        intro = self.good[self.good.index("Intro guidance:"):].split("\n", 1)[0]
-        no_method = re.sub(r"(?i)[^.]*methodology[^.]*\.", "", intro)
-        self.assertIn("eeat", failing(self.good.replace(intro, no_method), self.ctx))
+        self.assertFails("eeat", "Add an expert review note naming the PingCAP solutions engineer who reviews the technical claims. ", "")
+        h1 = self.good[slice(*bq.outline_parts(self.good)["h1"])]
+        no_method = re.sub(r"(?i)[^.\n]*(?:methodology|verif)[^.\n]*\.?", "", h1)
+        self.assertIn("eeat", failing(self.good.replace(h1, no_method), self.ctx))
 
     def test_comparison_template(self):
         self.assertFails("template_sections", "## How TiDB solves agent backend sprawl", "## Why distributed SQL handles agent sprawl")
@@ -483,7 +483,7 @@ class RegressionFixtureTests(unittest.TestCase):
         self.assertEqual(client.messages.create.call_count, 2, "exactly one repair round")
         self.assertEqual(report["status"], "validated")
         self.assertEqual(set(report["repair"]["units_applied"]),
-                         {"Meta Elements", "Outline / Headings::h2_4", "Outline / Headings::h2_9"})
+                         {"Meta Elements", "Outline / Headings::h2_4", "Outline / Headings::h2_10"})
         self.assertTrue(all(c["passed"] for c in report["checks"]), [c for c in report["checks"] if not c["passed"]])
         self.assertTrue({"meta_title", "style_lint", "faqs", "primary_cta", "sql_vector_syntax"}
                         <= {c["id"] for c in report["checks"]})

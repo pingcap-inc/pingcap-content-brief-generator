@@ -834,6 +834,9 @@ def apply_deterministic(content, ctx):
             ("Search Intent", intent_label(resolution["search_intent"]), "Target Keyword"),
             ("Supporting Keywords", cell, "Search Intent"),
             ("Total MSV", f"{total:,} (primary {resolution['primary_metrics']['msv']:,} + supporting{total_note})", "Supporting Keywords"),
+            ("MSV Source", "DataForSEO Google Ads, United States, monthly average. Primary keyword worldwide: "
+             + (f"{ctx['primary_msv_worldwide']:,}" if isinstance(ctx.get("primary_msv_worldwide"), int)
+                else "unavailable"), "Total MSV"),
             ("URL Structure", target_url(ctx, primary), "Meta Description")]:
         content = _set_meta_row(content, label, value, after)
 
@@ -1409,6 +1412,9 @@ def _faq_check(content, ctx, parts, found, template, meta, competitor):
         q = tokens(question)
         if q and not any(len(q & src) >= cfg["source_overlap"] * len(q) for src in sources):
             unsourced.append(question)
+        if any(re.search(p, question) for p in cfg.get("forbidden_question_patterns", [])):
+            problems.append(f"FAQ question is not neutral: {question!r}. Rephrase it as a neutral "
+                            "question about fit, capability, or migration")
         label = re.search(rf"(?mi)^\**{re.escape(cfg['answer_label'])}:?\**:?\s*$", blk)
         if not label:
             problems.append(f"FAQ {question!r} has no '{cfg['answer_label']}:' bullets")

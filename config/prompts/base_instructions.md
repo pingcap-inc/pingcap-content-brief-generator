@@ -211,15 +211,17 @@ The research data lists only the SERP pages (from the top {{serp.depth}}) that w
 judged relevant to the article angle; irrelevant pages were already removed.
 Produce a table of {{serp.table_min_rows}} to {{serp.table_max_rows}} of those pages:
 
-| # | Page | Key Angle |
-|---|------|-----------|
-| [rank] | [page title / domain] | [one specific sentence on what this page covers and the angle it takes] |
+| # | Page | Key Angle | How to outrank |
+|---|------|-----------|----------------|
+| [rank] | [page title / domain] | [one specific sentence on what this page covers and the angle it takes] | [one specific sentence: what our page must do better or add to beat it, e.g. a missing comparison, fresher data, a deeper section] |
 
 Preserve each page's original SERP rank. Use only pages from the supplied relevant
 list. Do not mention excluded or irrelevant pages at all: no "not relevant" rows or
 notes. Identify PingCAP pages as existing owned coverage, not external competitors,
 and recommend reviewing them for a refresh before commissioning duplicate coverage.
 Base key angles on supplied snippets/headings; do not imply an unread full-page audit.
+"How to outrank" names the concrete content gap or advantage for that page; for an owned
+PingCAP page, say what to refresh instead.
 
 **Block 2: Patterns Favored by AI Overviews & LLMs**
 
@@ -295,7 +297,8 @@ Directly under the H1, write its own line "Target: ~X–Y words" for the introdu
 Every brief has a FAQ H2 with {{faq.min_questions}} to {{faq.max_questions}} questions (5 by default), each as an H3.
 Source the questions from the Relevant LLM Queries you wrote in Meta Elements and
 from the supplied PAA questions for the primary keyword; do not invent unrelated
-questions. Under each question H3, write "**{{faq.answer_label}}:**" followed by
+questions. Keep competitor questions neutral: never ask whether a competitor is obsolete,
+dead, dying, or outdated, even if a PAA question does. Under each question H3, write "**{{faq.answer_label}}:**" followed by
 1 to {{faq.max_bullets}} bullet points of at most 20 words each and nothing else: a direction
 for the writer (what the answer must cover), not a pre-written answer. No Target or
 Rationale lines under FAQ H3s, no preamble, no prose paragraph.

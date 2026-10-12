@@ -52,10 +52,10 @@ key_takeaways:
 # its instruction to the intro guidance instead of failing the brief.
 eeat:
   - id: expert_review
-    all: ['(?i)expert review']
+    all: ['(?i)\breview']
     instruction: Add an expert review note naming the technical reviewer and review date.
   - id: methodology_note
-    all: ['(?i)methodology', '(?i)verif']
+    all: ['(?i)methodology|verif(?:y|ied|ication)']
     instruction: Add a methodology note stating that feature availability, pricing, and ratings are verified before publication.
 
 faq:
@@ -63,6 +63,8 @@ faq:
   max_questions: 6
   max_bullets: 2
   answer_label: Answer guidance
+  # Competitor questions stay neutral (reviewer feedback on "Is MariaDB obsolete?").
+  forbidden_question_patterns: ['(?i)\b(?:obsolete|dead|dying|outdated|going away|still relevant)\b']
   # Share of question tokens that must overlap a PAA question or LLM query.
   source_overlap: 0.5
   # Share of FAQ questions that must overlap a PAA question or LLM query.
@@ -178,7 +180,8 @@ brief_length:
     Schema Markup Recommendations: 90
     CTAs: 90
     Word Count Target: 60
-  outline_preamble_max_words: 280
+  # The SERP table carries a "How to outrank" column per page.
+  outline_preamble_max_words: 340
   h1_max_words: 190
   faq_max_words: 180
   # Body H2s share what the whole-brief cap leaves after every other section, so

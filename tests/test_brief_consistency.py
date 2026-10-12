@@ -313,7 +313,7 @@ class OutputTests(unittest.TestCase):
 
     def test_serp_heading_variants_and_table(self):
         ns = namespace()
-        table = '| # | Page | Key Angle |\n|---|---|---|\n| 1 | Example | Specific angle |\n'
+        table = '| # | Page | Key Angle | How to outrank |\n|---|---|---|---|\n| 1 | Example | Specific angle | Add the missing comparison |\n'
         for title in ['### Block 1 — Top Ranking Pages', '**Block 1 — Top ranking pages table**',
                       '### SERP Competitor Table', '**### Block 1 — Top Ranking Pages**']:
             preamble = title + '\n' + table + '\n### Block 2 — Patterns Favored by AI Overviews & LLMs\n- Observed pattern.\n'
