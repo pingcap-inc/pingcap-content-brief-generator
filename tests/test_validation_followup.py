@@ -475,3 +475,14 @@ class ReviewerCommentTests(unittest.TestCase):
         titles=[t for t,*_ in bq.outline_parts(text)['h2s']]
         self.assertIn('FAQ',titles[-1])
         self.assertTrue(titles[-2].startswith('How should you choose'))
+
+
+class FaqLastTests(unittest.TestCase):
+    """FAQs are the last H2 for every content type."""
+
+    def test_faq_is_last_everywhere(self):
+        for t in ('comparison','alternative','listicle','blog','solution','product','playbook'):
+            template=bq.template_for(t)
+            faq=next(s for s in template['sections'] if s['id']==template['faq_section'])
+            self.assertEqual(faq.get('position'),-1,t)
+            self.assertEqual(template['sections'][-1]['id'],template['faq_section'],t)

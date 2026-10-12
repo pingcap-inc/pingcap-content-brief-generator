@@ -8,18 +8,19 @@ primary_cta_section: closing
 mechanism_section: null
 word_weights: null
 sections:
-- id: faqs
+# FAQs are the last H2 for every content type (reviewer feedback, Oct 2026).
+- id: closing
   position: -2
+  label: Closing section with the primary CTA
+  match:
+  - .
+- id: faqs
+  position: -1
   label: FAQs
   match:
   - (?i)\bfaqs?\b
   - (?i)frequently asked
-- id: closing
-  position: -1
-  label: Closing section with the primary CTA
-  match:
-  - .
 guidance: |
-  For this content type, end the outline with a FAQ H2 followed by a closing H2
-  that resolves the intro and holds the primary CTA.
+  For this content type, end the outline with a closing H2 that resolves the intro
+  and holds the primary CTA, followed by the FAQ H2 as the last H2.
 checklist: ''
