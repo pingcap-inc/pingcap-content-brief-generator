@@ -20,17 +20,18 @@ sections:
   match:
   - (?i)^tidb\b
   - (?i)how tidb
-- id: faqs
+# FAQs are the last H2 for every content type (reviewer feedback, Oct 2026).
+- id: closing_cta
   position: -2
+  label: Closing CTA
+  match:
+  - .
+- id: faqs
+  position: -1
   label: FAQs
   match:
   - (?i)\bfaqs?\b
   - (?i)frequently asked
-- id: closing_cta
-  position: -1
-  label: Closing CTA
-  match:
-  - .
 guidance: |
   For solution content type, the outline must follow this exact structure.
   Solution pages are conversion-focused product pages targeting a specific
@@ -44,7 +45,7 @@ guidance: |
 
   **Solution page narrative arc:**
   Hero → Pain → Solution → Use Cases → Architecture → Social Proof →
-  Adoption Journey → Resources → Closing CTA
+  Adoption Journey → Resources → Closing CTA → FAQs
 
   **H1: Value proposition headline**
   Format: "[TiDB capability] for [industry/use case]" or "[Outcome] with TiDB"
@@ -150,10 +151,7 @@ guidance: |
   All links must be verified pingcap.com URLs; do not invent paths.
   Rationale: one sentence.
 
-  **H2 9: FAQs** (placed before the closing CTA)
-  Follow the FAQ rules above.
-
-  **H2 10: Closing CTA**
+  **H2 9: Closing CTA**
   Title pattern: "Get started with TiDB for [vertical/use case]"
   Target: ~120–160 words.
   Content: 3 role-based H3 CTAs:
@@ -163,6 +161,9 @@ guidance: |
   Each H3 names the role it targets. The single primary CTA (the supplied
   priority link) sits in this H2; the role-based H3s use secondary CTAs.
   Rationale: one sentence.
+
+  **H2 10: FAQs** (the last H2, after the closing CTA)
+  Follow the FAQ rules above.
 
   **Solution page URL structure:** Always /solutions/[slug]/
   Examples: /solutions/fintech/ /solutions/real-time-logistics-data-platform/
@@ -188,6 +189,6 @@ guidance: |
   ---
 checklist: |
   23. Solution briefs follow Pain, Solution, Use Cases, Architecture, Social Proof,
-      Adoption Journey, Resources, FAQs, Closing CTA, use /solutions/[slug], and include
+      Adoption Journey, Resources, Closing CTA, FAQs (last), use /solutions/[slug], and include
       a hero with video block, value prop bullets, and secondary CTAs.
   24. Solution schema includes VideoObject, HowTo, FAQPage, and SoftwareApplication.

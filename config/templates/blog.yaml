@@ -5,7 +5,8 @@
 # fallback template in default.yaml.
 content_types:
 - blog
-max_h2: 10
+# Numbered posts ("The Seven ...") need one H2 per item plus the closing sections.
+max_h2: 12
 faq_section: faqs
 primary_cta_section: closing
 mechanism_section: tidb_fit
@@ -17,8 +18,6 @@ sections:
   - (?i)^(?:where|why|when) (?:tidb|pingcap)\b
   - (?i)^how (?:tidb|pingcap)\b
   requires_mechanism: true
-  required_terms:
-  - (?i)\bintro
 - id: closing
   position: -2
   label: Closing section with the single primary CTA
@@ -61,8 +60,8 @@ guidance: |
 
   **Numbered titles** ("The Seven Pressure Points...", "5 Ways to..."): give each
   promised item its own H2 and fold the definition into the H1 intro guidance
-  instead of a separate "What is" H2, so the outline stays within 10 H2s
-  (items + Where TiDB fits + closing + FAQs). Keep each item H2 to the same
+  instead of a separate "What is" H2, so the outline stays within 12 H2s
+  (items + checklist + Where TiDB fits + closing + FAQs). Keep each item H2 to the same
   shape: the symptom, why it happens, and the usual workaround's cost.
 
   Every blog outline has, in this order at the end:
