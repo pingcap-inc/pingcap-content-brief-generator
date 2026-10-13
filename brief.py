@@ -1411,6 +1411,9 @@ Null values mean unavailable, never a measured zero. Do not invent link-type rat
             repaired_raw = "\n".join(b.text for b in repair.content if b.type == "text")
             report["repair"] = {"units_requested": sorted(plan_units), "violations_before": errors,
                                 "stop_reason": repair.stop_reason, "rounds": rounds}
+            # Keep every round, so a later round cannot hide what an earlier one did.
+            report.setdefault("repair_history", []).append(
+                {"round": rounds, "units_requested": sorted(plan_units), "violations_before": errors})
             if repair.stop_reason != "end_turn":
                 break
             spliced, applied = bq.apply_repair(text, repaired_raw, plan_units)

@@ -525,7 +525,7 @@ class RegressionFixtureTests(unittest.TestCase):
     def test_unrepaired_draft_fails_with_every_check_in_validation_json(self):
         bad = FIXTURE.replace("Cover MCP servers", "Seamlessly cover MCP servers")
         with self.assertRaisesRegex(ValueError, "style_lint"):
-            self.run_generation([reply(bad), reply(bad), reply(bad)])
+            self.run_generation([reply(bad), reply(bad), reply(bad), reply(bad)])
         report = self.saved_report()
         self.assertEqual(report["status"], "unvalidated")
         lint = next(c for c in report["checks"] if c["id"] == "style_lint")

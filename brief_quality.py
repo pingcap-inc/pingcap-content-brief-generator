@@ -1660,14 +1660,24 @@ def repair_prompt(content, plan):
     spans = unit_spans(content)
     parts = ["The brief below failed automated checks. Rewrite ONLY the listed units so "
              "every violation is fixed. Correct headings, Target lines, or structure when "
-             "a listed violation requires it. Preserve unrelated content. Follow all original rules.",
+             "a listed violation requires it. Preserve unrelated content. Follow all original rules. "
+             "When shortening, cut wording, never required elements: keep every table (all its rows), "
+             "'Key differences' and 'Choose ... if' H3s, the Sources line, Target lines, Primary CTA "
+             "and internal-link lines, and FAQ questions.",
              "Return each unit exactly in this form and nothing else:\n<<<UNIT id>>>\n"
              "...full replacement text...\n<<<END UNIT>>>"]
     for unit, problems in plan.items():
         if unit not in spans:
             continue
         start, end = spans[unit]
-        parts.append(f"## Unit {unit}\nViolations:\n" + "\n".join("- " + p for p in problems)
+        budget = ""
+        if not any(p.startswith("brief_length:") for p in problems):
+            # Fixing one problem must not create a length failure the next check cannot repair.
+            words = brief_words(content[start:end])
+            budget = (f"\nLength: keep this unit within about {int(words * 1.1) + 10} words unless a listed "
+                      "violation requires new content, such as a missing table; then keep the added "
+                      "content as short as the rules allow.")
+        parts.append(f"## Unit {unit}\nViolations:\n" + "\n".join("- " + p for p in problems) + budget
                      + f"\nCurrent text:\n<<<UNIT {unit}>>>\n{content[start:end].rstrip()}\n<<<END UNIT>>>")
     return "\n\n".join(parts)
 

@@ -211,5 +211,6 @@ mechanism_tie_back:
   bullet: "- Tie this back to the problem named in the intro: show how the mechanism above resolves it for the reader."
 
 repair:
-  # A second round runs only when the first leaves failures (usually a small length overrun).
-  max_rounds: 2
+  # Later rounds run only when the previous one leaves failures (for example, a
+  # shortening round that dropped a table, then a round that restores it).
+  max_rounds: 3

@@ -486,3 +486,20 @@ class FaqLastTests(unittest.TestCase):
             faq=next(s for s in template['sections'] if s['id']==template['faq_section'])
             self.assertEqual(faq.get('position'),-1,t)
             self.assertEqual(template['sections'][-1]['id'],template['faq_section'],t)
+
+
+class RepairDoesNotUndoItselfTests(unittest.TestCase):
+    """TiDB vs. MariaDB v6: round 1 shortened the brief but dropped the table; round 2 restored it and overran."""
+
+    def test_repair_keeps_required_elements_and_caps_growth(self):
+        text,_,_=finished()
+        prompt=bq.repair_prompt(text,{'Outline / Headings::h2_2':['section_at_a_glance: At-a-glance table is missing'],
+                                      'Outline / Headings::h2_3':['brief_length: h2_3 is 200 words; maximum 92.']})
+        self.assertIn('never required elements',prompt)
+        glance=prompt[prompt.index('## Unit Outline / Headings::h2_2'):prompt.index('## Unit Outline / Headings::h2_3')]
+        self.assertIn('Length: keep this unit within about',glance)
+        length_unit=prompt[prompt.index('## Unit Outline / Headings::h2_3'):]
+        self.assertNotIn('Length: keep this unit within about',length_unit.split('Current text:')[0])
+
+    def test_three_repair_rounds_allowed(self):
+        self.assertEqual(bq.rules()['repair']['max_rounds'],3)
