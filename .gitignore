@@ -37,3 +37,4 @@ brief_*.md
 .keyword_cache/
 brief_run_*/
 brief_failed_*/
+briefs/

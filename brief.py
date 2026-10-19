@@ -148,6 +148,19 @@ def dataforseo_post(endpoint, payload):
     return data
 
 
+def get_worldwide_volume(keyword):
+    """Worldwide monthly search volume for one keyword (the brief's MSV is US-only)."""
+    try:
+        data = dataforseo_post("keywords_data/google_ads/search_volume/live",
+                               [{"keywords": [keyword], "language_code": "en"}])
+        record_api_cost("keywords_data/google_ads/search_volume/live (worldwide)", data)
+        rows = data["tasks"][0].get("result") or []
+        return rows[0].get("search_volume") if rows else None
+    except Exception as exc:
+        print(f"    Warning: worldwide volume unavailable: {exc}")
+        return None
+
+
 def get_keyword_data(topic):
     """
     Fetch search volume and keyword difficulty for the topic
@@ -1007,10 +1020,10 @@ def validate_serp_blocks(outline):
     table_ok = False
     for i in range(len(rows) - 2):
         header, separator, data = rows[i:i + 3]
-        if ([cell.casefold() for cell in header] == ["#", "page", "key angle"]
-                and len(separator) == 3
+        if ([cell.casefold() for cell in header] == ["#", "page", "key angle", "how to outrank"]
+                and len(separator) == 4
                 and all(re.fullmatch(r":?-{3,}:?", cell) for cell in separator)
-                and len(data) == 3 and all(data)
+                and len(data) == 4 and all(data)
                 and not all(re.fullmatch(r"[-:]+", cell) for cell in data)):
             table_ok = True
             break
@@ -1041,7 +1054,8 @@ def validate_brief(content, content_type, candidates, plan, ctx=None, existing_p
     # Fenced SQL/Markdown samples are not outline headings.
     outline = "".join("\n" if fenced else line for line, fenced in markdown_lines(outline))
     h2s = list(re.finditer(r"(?m)^##\s+(.+)$", outline))
-    if not 1 <= len(h2s) <= (12 if content_type == "listicle" else 10):
+    from brief_quality import template_for
+    if not 1 <= len(h2s) <= template_for(content_type).get("max_h2", 10):
         errors.append("Invalid number of article H2s")
     # An AEO answer (comparison) or quick answer (listicle) precedes the table.
     glance = {"comparison": 1, "alternative": 1, "listicle": 1}.get(content_type)
@@ -1126,18 +1140,22 @@ def validate_brief(content, content_type, candidates, plan, ctx=None, existing_p
 
 def _save_failed_brief(text, research_block, report):
     """Preserve paid output and research; a unique directory keeps earlier failures."""
-    draft_dir = tempfile.mkdtemp(prefix="brief_failed_", dir=os.getcwd())
+    import brief_quality
+    # Failed drafts live in the run's own folder ("<title> [<type>] vN" under briefs/).
+    draft_dir = report.get("run_dir") or brief_quality.run_folder(
+        report.get("topic") or "brief", report.get("content_type") or "brief", os.path.join(os.getcwd(), "briefs"))
     draft_path = os.path.join(draft_dir, "draft.md")
     with open(draft_path, "w", encoding="utf-8") as handle:
         handle.write("<!-- UNVALIDATED DRAFT: not approved for publication. "
                      "See validation.json. -->\n\n" + text)
     print(f"           Unvalidated draft saved: {draft_path}")
-    report_path = os.path.join(draft_dir, "validation.json")
+    report_path = os.path.join(draft_dir, "quality_report.json")
     with open(report_path, "w", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2, ensure_ascii=False)
     with open(os.path.join(draft_dir, "research.md"), "w", encoding="utf-8") as handle:
         handle.write(research_block)
     print(f"           Validation report saved: {report_path}")
+    report["draft_dir"] = draft_dir
     return draft_dir
 
 
@@ -1380,9 +1398,11 @@ Null values mean unavailable, never a measured zero. Do not invent link-type rat
         checks = check(text)
         errors = bq.failures(checks) if quality else checks
         plan_units = bq.repair_plan(checks) if quality and errors else {}
-        if plan_units and bq.rules()["repair"]["max_rounds"] >= 1:
-            # One regeneration of only the offending sections. Link rows go back to h2_N
-            # IDs first, so renamed or reordered H2s re-render after the repair.
+        rounds = 0
+        while plan_units and rounds < bq.rules()["repair"]["max_rounds"]:
+            rounds += 1
+            # Regenerate only the offending sections. Link rows go back to h2_N IDs
+            # first, so renamed or reordered H2s re-render after the repair.
             text = unresolve_internal_link_ids(text)
             try:
                 repair = ask(research_block + "\n\n---\n\n" + bq.repair_prompt(text, plan_units))
@@ -1390,14 +1410,19 @@ Null values mean unavailable, never a measured zero. Do not invent link-type rat
                 preserve_failure(text, 'Draft repair request', exc)
             repaired_raw = "\n".join(b.text for b in repair.content if b.type == "text")
             report["repair"] = {"units_requested": sorted(plan_units), "violations_before": errors,
-                                "stop_reason": repair.stop_reason}
-            if repair.stop_reason == "end_turn":
-                spliced, applied = bq.apply_repair(text, repaired_raw, plan_units)
-                report["repair"]["units_applied"] = applied
-                text, more = finish(spliced[len(header):] if spliced.startswith(header) else spliced)
-                notes += more
-                checks = check(text)
-                errors = bq.failures(checks)
+                                "stop_reason": repair.stop_reason, "rounds": rounds}
+            # Keep every round, so a later round cannot hide what an earlier one did.
+            report.setdefault("repair_history", []).append(
+                {"round": rounds, "units_requested": sorted(plan_units), "violations_before": errors})
+            if repair.stop_reason != "end_turn":
+                break
+            spliced, applied = bq.apply_repair(text, repaired_raw, plan_units)
+            report["repair"]["units_applied"] = applied
+            text, more = finish(spliced[len(header):] if spliced.startswith(header) else spliced)
+            notes += more
+            checks = check(text)
+            errors = bq.failures(checks)
+            plan_units = bq.repair_plan(checks) if errors else {}
 
     report.update(stop_reason=stop_reason, deterministic_notes=notes,
                   checks=[{k: v for k, v in c.items() if k != "units"} for c in checks] if quality else [],
@@ -1798,6 +1823,39 @@ def split_brief(content):
 
 # ── Google Docs ───────────────────────────────────────────────────────────────
 
+def drive_doc_title(topic, content_type):
+    try:
+        short_title = summarize_title(topic)
+    except Exception as exc:
+        print(f"          Title summarisation failed, using raw topic: {exc}")
+        short_title = topic[:60]
+    return f"Content Brief: {short_title} [{content_type}]"
+
+
+def upload_unvalidated_draft(topic, content_type, report):
+    """Put a failed brief in the same Drive folder, marked UNVALIDATED with its failed
+    checks on top, so it can be shared and fixed instead of staying on one laptop."""
+    draft_dir = report.get("draft_dir")
+    path = os.path.join(draft_dir, "draft.md") if draft_dir else None
+    if not path or not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        draft = re.sub(r"^<!--.*?-->\s*", "", handle.read(), flags=re.S)
+    if not draft.strip():
+        return None
+    failed = report.get("errors") or []
+    notice = ("**UNVALIDATED DRAFT: fix these before publication.**\n\n"
+              + "\n".join(f"- {e}" for e in failed) + "\n\n---\n\n")
+    print("           Uploading the unvalidated draft to Google Drive...")
+    try:
+        url = create_google_doc("[UNVALIDATED] " + drive_doc_title(topic, content_type), notice + draft)
+    except Exception as exc:
+        print(f"          Google Docs failed: {exc}. The draft stays in {draft_dir}")
+        return None
+    print(f"           Unvalidated draft in Drive: {url}")
+    return url
+
+
 def get_google_credentials():
     """Return valid Google OAuth2 credentials, refreshing or re-authorising as needed."""
     creds = None
@@ -2080,7 +2138,9 @@ def main():
         sys.exit(1)
     search_keyword = keyword_resolution['primary_keyword']
     # Save confirmation immediately so later provider/export errors cannot lose it.
-    audit_dir = tempfile.mkdtemp(prefix='brief_run_', dir=os.getcwd())
+    # One readable folder per run: briefs/<title> [<type>] v1, v2, ...
+    audit_dir = brief_quality.run_folder(topic, content_type, os.path.join(os.getcwd(), 'briefs'))
+    print(f"           Run folder: {audit_dir}")
     audit_path = os.path.join(audit_dir, 'validation.json')
     with open(audit_path, 'w', encoding='utf-8') as handle:
         json.dump({'status':'keyword_confirmed', 'keyword_resolution':keyword_resolution},
@@ -2351,10 +2411,11 @@ def main():
     except ResolutionError:
         entities = {}
     quality_context = {"url_verifier": url_verifier, "case_study_text": case_study_text,
+                       "primary_msv_worldwide": get_worldwide_volume(search_keyword),
                        "competitor": entities.get("competitor") or None,
                        "serp_source_keyword": serp_features["source_keyword"],
                        "existing_page": existing_page}
-    quality_report = {}
+    quality_report = {"run_dir": audit_dir}
     try:
         brief = generate_brief(
             topic,
@@ -2381,7 +2442,11 @@ def main():
             json.dump({'status':'unvalidated', 'keyword_resolution':keyword_resolution,
                        'checks':quality_report.get('checks', []), 'errors':quality_report.get('errors', [str(exc)])},
                       handle, indent=2, ensure_ascii=False)
+        upload_unvalidated_draft(topic, content_type, quality_report)
         sys.exit(1)
+    for check in quality_report.get('checks', []):
+        for warning in check.get('warnings', []):
+            print(f"           Warning ({check['id']}): {warning}")
 
     safe_title = re.sub(r"[^\w\s-]", "", topic[:50]).strip().replace(" ", "_")
     local_path = os.path.join(audit_dir, f"brief_{safe_title}.md")
@@ -2397,12 +2462,7 @@ def main():
     print("           Creating Google Doc...")
     print("           (A browser window may open for Google authentication)")
     print("           Summarising topic into doc title...")
-    try:
-        short_title = summarize_title(topic)
-    except Exception as exc:
-        print(f"          Title summarisation failed, using raw topic: {exc}")
-        short_title = topic[:60]
-    doc_title = f"Content Brief: {short_title} [{content_type}]"
+    doc_title = drive_doc_title(topic, content_type)
     try:
         doc_url = create_google_doc(doc_title, brief)
     except Exception as exc:

@@ -3,10 +3,11 @@
 Before outputting the brief, verify every item below. Rewrite any section that
 fails a check before proceeding. The generator re-checks most items in code.
 
-1.  The whole brief is at most {{brief_length.max_words}} words (fenced code excluded), and no
+1.  The whole brief is about {{brief_length.target_words}} words (hard maximum {{brief_length.max_words}};
+    fenced code excluded), and no
     section exceeds its cap. Bullets, not paragraphs; no rule restated twice.
 2.  Every H2 has a one-sentence Rationale (at most 20 words) and 2 to 3 guidance
-    bullets (each at most 30 words).
+    bullets (each at most 20 words); each H2 block is about {{brief_length.section_target_words}} words.
 3.  H3s are heading lines only, except FAQ answer bullets and template-required tables.
 4.  The brief contains NO standalone sections titled "Key Points to Cover",
     "Proof Points", "Data to Find", "Examples", "Visuals to Add",
@@ -27,8 +28,8 @@ fails a check before proceeding. The generator re-checks most items in code.
     mention of excluded pages, and (2) a "Patterns Favored by AI Overviews & LLMs"
     block based on the primary keyword's SERP.
 12. Directly under the H1: a {{key_takeaways.label}} block of {{key_takeaways.min_bullets}} to {{key_takeaways.max_bullets}} bullets, each
-    {{key_takeaways.min_words}} to {{key_takeaways.max_words}} words, then intro guidance with an author bio and credentials, an
-    expert review note, and a methodology note about verifying ratings, pricing,
+    {{key_takeaways.min_words}} to {{key_takeaways.max_words}} words, then intro guidance with an
+    expert review note and a methodology note about verifying ratings, pricing,
     and feature availability.
 13. Every page-type template H2 is present in the template's order.
 14. The FAQ H2 has {{faq.min_questions}} to {{faq.max_questions}} questions sourced from the Relevant LLM Queries and
@@ -42,7 +43,7 @@ fails a check before proceeding. The generator re-checks most items in code.
     "{{claims.verify_marker}}". No invented review ratings.
 18. SQL labeled TiDB or MySQL never uses <=> for vector distance.
 19. Heading hierarchy is strictly H1 -> H2 -> H3 with no skips, and the
-    outline has at most 10 H2s (12 for listicles).
+    outline has at most 10 H2s (12 for listicles and blogs).
 20. Every H2 includes a "Target: ~X–Y words" line, no Visual line, and top-level
     targets sum to within the Word Count Plan tier.
 21. The brief contains a standalone Target Audience section between Page Goal and
