@@ -190,27 +190,6 @@ For hosted deployments, base64-encode token.json and credentials.json and pass t
 as TOKEN\_JSON\_B64 and CREDENTIALS\_JSON\_B64 environment variables — the script decodes
 them automatically at startup.
 
-## Claude code review (Bedrock)
-
-Every pull request is reviewed automatically by Claude via
-`.github/workflows/claude-code-review.yml` (using `anthropics/claude-code-action@v1`)
-running against **Amazon Bedrock**, authenticating with static AWS access keys. There is
-no `ANTHROPIC_API_KEY` secret and no Claude GitHub App to install.
-
-One-time setup by a repo admin, under
-Settings > Secrets and variables > Actions:
-
-1. **Add secrets** (Secrets tab):
-   - `BEDROCK_AWS_ACCESS_KEY_ID` — an AWS access key ID with Bedrock `InvokeModel` access.
-   - `BEDROCK_AWS_SECRET_ACCESS_KEY` — the matching secret access key.
-2. **(Optional) Add variables** (Variables tab; defaults are already baked in):
-   - `BEDROCK_AWS_REGION` — defaults to `ap-southeast-1`.
-   - `ANTHROPIC_MODEL` — defaults to `global.anthropic.claude-sonnet-4-5-20250929-v1:0`.
-     Ensure Claude model access is granted for this inference profile in your account.
-
-After that, opening or updating a PR triggers the review; Claude posts inline comments
-and a summary. Comments are posted with the default `GITHUB_TOKEN` (as `github-actions[bot]`).
-
 ## Brief consistency checks
 
 Listicles allow up to 12 H2 sections; other types allow 10. Article word budgets
