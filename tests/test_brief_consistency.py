@@ -138,7 +138,7 @@ class OutputTests(unittest.TestCase):
             ns['os'] = Mock(getenv=lambda key: None, getcwd=lambda: folder, path=os.path)
             with self.assertRaisesRegex(ValueError,'incomplete'):
                 ns['generate_brief']('scaling','blog',SEED,[],[],[])
-            drafts = list(Path(folder).glob('brief_failed_*/draft.md'))
+            drafts = list(Path(folder).glob('briefs/*/draft.md'))
             self.assertEqual(len(drafts), 1)
             self.assertIn('Partial output', drafts[0].read_text())
     def test_complete_generation_and_title(self):
@@ -313,7 +313,7 @@ class OutputTests(unittest.TestCase):
 
     def test_serp_heading_variants_and_table(self):
         ns = namespace()
-        table = '| # | Page | Key Angle |\n|---|---|---|\n| 1 | Example | Specific angle |\n'
+        table = '| # | Page | Key Angle | How to outrank |\n|---|---|---|---|\n| 1 | Example | Specific angle | Add the missing comparison |\n'
         for title in ['### Block 1 — Top Ranking Pages', '**Block 1 — Top ranking pages table**',
                       '### SERP Competitor Table', '**### Block 1 — Top Ranking Pages**']:
             preamble = title + '\n' + table + '\n### Block 2 — Patterns Favored by AI Overviews & LLMs\n- Observed pattern.\n'

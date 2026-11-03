@@ -179,7 +179,7 @@ class DraftPreservationTests(unittest.TestCase):
             self.run_generation([reply(bad),RuntimeError('repair service unavailable')])
         report=self.saved_report()
         self.assertEqual(report['failure_stage'],'Draft repair request')
-        self.assertIn('Seamlessly',next(Path(self.folder).glob('brief_failed_*/draft.md')).read_text())
+        self.assertIn('Seamlessly',next(Path(self.folder).glob('briefs/*/draft.md')).read_text())
 
     def test_paid_draft_is_saved_when_check_crashes(self):
         from test_brief_quality import FIXTURE
@@ -276,7 +276,7 @@ class EarlyResearchGateTests(unittest.TestCase):
                  patch.object(kr,'validate_resolution',return_value=resolution),redirect_stdout(io.StringIO()):
                 with self.assertRaises(SystemExit) as caught:
                     ns['main']()
-            report=json.loads(next(Path(folder).glob('brief_run_*/validation.json')).read_text())
+            report=json.loads(next(Path(folder).glob('briefs/*/validation.json')).read_text())
         self.assertEqual(caught.exception.code,1)
         self.assertEqual(report['status'],'research_blocked')
         self.assertEqual(report['serp_evidence'][0]['relevance'],0.1)

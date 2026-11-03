@@ -42,7 +42,7 @@ Senior engineers, platform architects, and AI infrastructure leads at AI-native 
 
 | Section (H2) | Anchor text | Target URL | Why |
 |--------------|-------------|------------|-----|
-| h2_10 | distributed SQL database for AI applications | https://www.pingcap.com/ai/ | The decision endcap sends evaluators to the AI hub after they pick evaluation criteria. |
+| h2_9 | distributed SQL database for AI applications | https://www.pingcap.com/ai/ | The decision endcap sends evaluators to the AI hub after they pick evaluation criteria. |
 | h2_2 | TiDB vs PostgreSQL comparison | https://www.pingcap.com/compare/tidb-vs-postgresql/ | The at a glance table compares database models, which the PostgreSQL comparison expands on. |
 | h2_5 | TiDB Cloud Zero for agents | https://www.pingcap.com/tidb/cloud/zero/ | The deployment section explains per-agent TiDB Cloud Zero instances, which this page covers in depth. |
 
@@ -64,13 +64,13 @@ Senior engineers, platform architects, and AI infrastructure leads at AI-native 
 
 **Block 1: Top ranking pages table**
 
-| # | Page | Key Angle |
-|---|------|-----------|
-| 1 | Supabase alternatives roundup / example.com | Lists hosted Postgres alternatives with short pros and cons for each option. |
-| 2 | Supabase vs Firebase / example.org | Compares backend-as-a-service features with a focus on auth and storage. |
-| 3 | Top Supabase alternatives for AI apps / example.net | Frames alternatives around vector search and agent memory needs. |
-| 5 | Open source Supabase alternatives / example.io | Focuses on self-hosting options and licensing differences. |
-| 6 | Supabase pricing breakdown / example.dev | Explains usage-based pricing tiers and where costs rise with scale. |
+| # | Page | Key Angle | How to outrank |
+|---|------|-----------|----------------|
+| 1 | Supabase alternatives roundup / example.com | Lists hosted Postgres alternatives with short pros and cons for each option. | Add per-agent isolation and vector search in SQL, which the roundup skips. |
+| 2 | Supabase vs Firebase / example.org | Compares backend-as-a-service features with a focus on auth and storage. | Cover agent backends specifically, not generic app backends. |
+| 3 | Top Supabase alternatives for AI apps / example.net | Frames alternatives around vector search and agent memory needs. | Show working SQL for vector search and a dated pricing comparison. |
+| 5 | Open source Supabase alternatives / example.io | Focuses on self-hosting options and licensing differences. | Compare managed scale-out, not only self-hosting. |
+| 6 | Supabase pricing breakdown / example.dev | Explains usage-based pricing tiers and where costs rise with scale. | Compare billing models for many small agent databases. |
 
 **Block 2: Patterns Favored by AI Overviews & LLMs**
 
@@ -222,6 +222,18 @@ Target: ~432–528 words
 
 **Visual:** Architecture diagram: TiKV regions serving many agent databases.
 
+## How should you choose between Supabase and TiDB Cloud Zero?
+
+Target: ~432–528 words
+
+**Rationale**: Decision queries close the evaluation. Listing criteria helps readers self-select.
+
+**Inline Content Guidance**: Give evaluation criteria: tenant count, vector workload size, auth needs, and team SQL dialect. Then close with the CTA.
+
+**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/)
+
+**Visual:** Table: decision criteria checklist.
+
 ## Supabase alternative FAQs
 
 Target: ~288–352 words
@@ -253,18 +265,6 @@ Target: ~288–352 words
 - Compare billing models rather than list prices.
 
 **Visual:** None needed: prose is sufficient for this section.
-
-## How should you choose between Supabase and TiDB Cloud Zero?
-
-Target: ~432–528 words
-
-**Rationale**: Decision queries close the evaluation. Listing criteria helps readers self-select.
-
-**Inline Content Guidance**: Give evaluation criteria: tenant count, vector workload size, auth needs, and team SQL dialect. Then close with the CTA.
-
-**Primary CTA:** [distributed SQL database for AI applications](https://www.pingcap.com/ai/)
-
-**Visual:** Table: decision criteria checklist.
 
 ### Schema Markup Recommendations
 

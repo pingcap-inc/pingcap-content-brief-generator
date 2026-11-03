@@ -4,7 +4,7 @@
 # (case-insensitive regex on the heading text).
 content_types: [comparison, alternative]
 max_h2: 10
-# The FAQ H2 sits immediately before the closing H2.
+# The decision H2 (primary CTA) sits immediately before the FAQ H2, which is last.
 faq_section: faqs
 primary_cta_section: decision
 mechanism_section: how_tidb_solves
@@ -78,16 +78,16 @@ sections:
     label: How TiDB solves [problem named in the intro]
     match: ['(?i)^how tidb solves\b']
     requires_mechanism: true
-    required_terms: ['(?i)\bintro']
-  - id: faqs
-    position: -2
-    label: FAQs
-    match: ['(?i)\bfaqs?\b', '(?i)frequently asked']
+  # The decision section comes just before the FAQs (reviewer feedback, Oct 2026).
   - id: decision
-    position: -1
-    label: decision endcap with evaluation criteria
+    position: -2
+    label: decision section with evaluation criteria
     match: ['(?i)decision', '(?i)evaluat', '(?i)choos', '(?i)criteria']
     required_terms: ['(?i)criteria']
+  - id: faqs
+    position: -1
+    label: FAQs
+    match: ['(?i)\bfaqs?\b', '(?i)frequently asked']
 
 mechanisms:
   - distributed SQL on TiKV
@@ -139,9 +139,9 @@ guidance: |
   on TiKV/Raft, HTAP with TiFlash, the native VECTOR type) in the first sentence
   of the guidance and explicitly tie it back to the intro's problem. A generic
   feature list does not satisfy this.
-  **H2 9: FAQs.**
-  **H2 10: Decision endcap.** Give the reader evaluation criteria for choosing
-  between the two products, then the primary CTA.
+  **H2 9: Decision ("How to choose").** Give the reader evaluation criteria for
+  choosing between the two products, then the primary CTA.
+  **H2 10: FAQs.** The last H2.
 
   Every comparison H2 (3 to 7) includes an H3 titled "Key differences". In the
   brief, H3s are heading lines only; the H2's guidance bullets cover them.
@@ -153,7 +153,7 @@ checklist: |
   23. The outline has the 10 comparison H2s in order: AEO answer, at a glance,
       capabilities, integrations and developer workflow, deployment/governance/
       multi-tenant, support/reviews/market signals, pricing, How TiDB solves,
-      FAQs, decision endcap.
+      decision (with the primary CTA), FAQs last.
   24. The at-a-glance table has columns Category | [Competitor] | TiDB product |
       Best fit, 8 to 10 rows covering all nine required categories, every
       competitor cell filled, and a Sources line.
